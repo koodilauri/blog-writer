@@ -68,7 +68,9 @@ export class R2CheckpointSaver extends BaseCheckpointSaver {
       const stored = (await obj.json()) as StoredTuple
       const pendingWrites = await loadPendingWritesFromR2(this.bucket, threadId, checkpointId)
       return {
-        config: { configurable: { thread_id: threadId, checkpoint_id: checkpointId } },
+        config: {
+          configurable: { thread_id: threadId, checkpoint_id: checkpointId }
+        },
         checkpoint: stored.checkpoint,
         metadata: stored.metadata,
         parentConfig: stored.parentConfig,
@@ -77,7 +79,10 @@ export class R2CheckpointSaver extends BaseCheckpointSaver {
     }
 
     // Get latest checkpoint: list all for thread, sort by key (checkpoint IDs are timestamps)
-    const list = await this.bucket.list({ prefix: `${threadId}/`, limit: 1000 })
+    const list = await this.bucket.list({
+      prefix: `${threadId}/`,
+      limit: 1000
+    })
     const checkpointKeys = list.objects
       .filter(o => o.key.endsWith('.json') && !o.key.includes('/writes/'))
       .map(o => o.key)
@@ -93,7 +98,12 @@ export class R2CheckpointSaver extends BaseCheckpointSaver {
     const latestCheckpointId = checkpointKeys[0].replace(`${threadId}/`, '').replace('.json', '')
     const pendingWrites = await loadPendingWritesFromR2(this.bucket, threadId, latestCheckpointId)
     return {
-      config: { configurable: { thread_id: threadId, checkpoint_id: latestCheckpointId } },
+      config: {
+        configurable: {
+          thread_id: threadId,
+          checkpoint_id: latestCheckpointId
+        }
+      },
       checkpoint: stored.checkpoint,
       metadata: stored.metadata,
       parentConfig: stored.parentConfig,
@@ -126,7 +136,9 @@ export class R2CheckpointSaver extends BaseCheckpointSaver {
       const checkpointId = key.replace(`${threadId}/`, '').replace('.json', '')
       const pendingWrites = await loadPendingWritesFromR2(this.bucket, threadId, checkpointId)
       yield {
-        config: { configurable: { thread_id: threadId, checkpoint_id: checkpointId } },
+        config: {
+          configurable: { thread_id: threadId, checkpoint_id: checkpointId }
+        },
         checkpoint: stored.checkpoint,
         metadata: stored.metadata,
         parentConfig: stored.parentConfig,
@@ -150,13 +162,20 @@ export class R2CheckpointSaver extends BaseCheckpointSaver {
       checkpoint,
       metadata,
       parentConfig: parentCheckpointId
-        ? { configurable: { thread_id: threadId, checkpoint_id: parentCheckpointId } }
+        ? {
+            configurable: {
+              thread_id: threadId,
+              checkpoint_id: parentCheckpointId
+            }
+          }
         : undefined
     }
 
     await this.bucket.put(`${threadId}/${checkpointId}.json`, JSON.stringify(stored))
 
-    return { configurable: { thread_id: threadId, checkpoint_id: checkpointId } }
+    return {
+      configurable: { thread_id: threadId, checkpoint_id: checkpointId }
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

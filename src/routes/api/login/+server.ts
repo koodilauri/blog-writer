@@ -11,7 +11,10 @@ function getSecret() {
 async function readCredentials(request: Request): Promise<{ email: unknown; password: unknown }> {
   const contentType = request.headers.get('content-type') ?? ''
   if (contentType.includes('application/json')) {
-    const body = (await request.json()) as { email?: unknown; password?: unknown }
+    const body = (await request.json()) as {
+      email?: unknown
+      password?: unknown
+    }
     return { email: body.email, password: body.password }
   }
 

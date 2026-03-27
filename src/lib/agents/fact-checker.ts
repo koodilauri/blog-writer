@@ -84,11 +84,19 @@ export async function factCheckerNode(state: GraphStateType): Promise<Partial<Gr
 
   if (!parsed.success) {
     // If parsing fails, approve to avoid blocking the pipeline
-    return { approved: true, factCheckerNotes: [], revisionCount: state.revisionCount }
+    return {
+      approved: true,
+      factCheckerNotes: [],
+      revisionCount: state.revisionCount
+    }
   }
 
   if (parsed.data.approved) {
-    return { approved: true, factCheckerNotes: [], revisionCount: state.revisionCount }
+    return {
+      approved: true,
+      factCheckerNotes: [],
+      revisionCount: state.revisionCount
+    }
   }
 
   return {

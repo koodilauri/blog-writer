@@ -78,7 +78,10 @@ export async function editorNode(state: GraphStateType): Promise<Partial<GraphSt
     const withoutLeadingNotes = content
       .replace(/^#{1,4}\s*(?:notes?|changes?|edits?)[^\n]*\n(?:[-•*]\s+[^\n]+\n?)*\n*/i, '')
       .trim()
-    return { finalPost: withoutLeadingNotes || content.trim(), editorNotes: [] }
+    return {
+      finalPost: withoutLeadingNotes || content.trim(),
+      editorNotes: []
+    }
   }
 
   const rawNotes = notesMatch ? notesMatch[1].trim() : ''

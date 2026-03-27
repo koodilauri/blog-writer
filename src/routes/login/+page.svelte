@@ -119,6 +119,21 @@
         {/if}
       </button>
     </form>
+
+    <div class="demo-divider">
+      <span>or</span>
+    </div>
+
+    <button type="button" class="demo-btn" onclick={() => goto('/generate?demo')}>
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
+        <path
+          fill-rule="evenodd"
+          d="M2 10a8 8 0 1116 0A8 8 0 012 10zm6.39-2.908a.75.75 0 01.766.027l3.5 2.25a.75.75 0 010 1.262l-3.5 2.25A.75.75 0 018 12.25v-4.5a.75.75 0 01.39-.658z"
+          clip-rule="evenodd"
+        />
+      </svg>
+      Try the demo
+    </button>
   </main>
 </div>
 
@@ -382,6 +397,50 @@
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+  }
+
+  .demo-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+  }
+  .demo-divider::before,
+  .demo-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+  }
+  .demo-divider span {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.2);
+  }
+
+  .demo-btn {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.55);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition:
+      border-color 0.2s,
+      color 0.2s,
+      background 0.2s;
+  }
+  .demo-btn:hover {
+    border-color: rgba(129, 140, 248, 0.4);
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(99, 102, 241, 0.06);
   }
 
   .spin {

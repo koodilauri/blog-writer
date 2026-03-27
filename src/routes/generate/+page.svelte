@@ -1,7 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
+  import { page } from '$app/state'
   import Select from '$lib/components/ui/Select.svelte'
+  import { Dialog } from 'bits-ui'
+  import { marked } from 'marked'
+  import { DEMO_HISTORY_ITEMS, DEMO_SAVED_POSTS } from '$lib/demo-script'
+
+  function renderMd(text: string): string {
+    return marked.parse(text, { async: false }) as string
+  }
 
   type Source = { url: string; title: string; content?: string }
   type SeoMeta = { titles: string[]; metaDescription: string; tags: string[]; slug: string }
@@ -110,16 +118,31 @@
   let paused = $state(false)
   let approvedNotes = $state(new Set<number>())
 
+  const isDemo = $derived(page.url.searchParams.has('demo'))
+
+  let draftRawMode = $state(false)
+  let viewedPostRawMode = $state(false)
+
   let sidebarOpen = $state(false)
+  let sidebarCollapsed = $state(false)
   let historyItems = $state<PostListItem[]>([])
   let loadingHistory = $state(false)
-  let expandedPostId = $state<string | null>(null)
-  let expandedPost = $state<SavedPost | null>(null)
+  let viewedPostId = $state<string | null>(null)
+  let viewedPost = $state<SavedPost | null>(null)
   let loadingPost = $state(false)
+  let postToDeleteId = $state<string | null>(null)
 
   let userEmail = $state('')
 
   onMount(async () => {
+    // Demo mode: no auth, no session, pre-fill the form and seed history
+    if (isDemo) {
+      userEmail = 'demo@blogwriter.app'
+      topic = 'How AI coding assistants are changing software development'
+      historyItems = [...DEMO_HISTORY_ITEMS]
+      return
+    }
+
     const email = localStorage.getItem('auth_email')
     if (!email) {
       goto('/login')
@@ -245,21 +268,23 @@
               clearStallTimer()
               clearSession()
               stages = [...stages, { label: 'Post complete', stageType: 'done', isDone: true }]
-              fetch('/api/posts', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({
-                  runId,
-                  topic,
-                  format,
-                  tone,
-                  wordCount,
-                  post: event.post,
-                  sources: event.sources ?? [],
-                  seoMeta: event.seoMeta ?? null
-                })
-              }).catch(() => {})
-              loadHistory()
+              if (!isDemo) {
+                fetch('/api/posts', {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                    runId,
+                    topic,
+                    format,
+                    tone,
+                    wordCount,
+                    post: event.post,
+                    sources: event.sources ?? [],
+                    seoMeta: event.seoMeta ?? null
+                  })
+                }).catch(() => {})
+                loadHistory()
+              }
             } else if (event.stage === 'error') {
               errorMsg = event.error
               canResume = !!runId
@@ -412,7 +437,8 @@
     approvedNotes = new Set()
 
     controller = new AbortController()
-    const res = await fetch('/api/generate', {
+    const endpoint = isDemo ? '/api/demo' : '/api/generate'
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ topic, format, tone, wordCount }),
@@ -464,25 +490,37 @@
   }
 
   async function expandPost(id: string) {
-    if (expandedPostId === id) {
-      expandedPostId = null
-      expandedPost = null
+    if (viewedPostId === id) {
+      viewedPostId = null
+      viewedPost = null
       return
     }
-    expandedPostId = id
-    expandedPost = null
+    viewedPostId = id
+    viewedPost = null
+    if (isDemo) {
+      viewedPost = (DEMO_SAVED_POSTS[id] as SavedPost) ?? null
+      return
+    }
     loadingPost = true
     const res = await fetch(`/api/posts?id=${id}`)
-    if (res.ok) expandedPost = await res.json()
+    if (res.ok) viewedPost = await res.json()
     loadingPost = false
   }
 
-  async function deletePost(id: string) {
+  function promptDeletePost(id: string) {
+    if (isDemo) return
+    postToDeleteId = id
+  }
+
+  async function confirmDeletePost() {
+    if (!postToDeleteId) return
+    const id = postToDeleteId
+    postToDeleteId = null
     await fetch(`/api/posts?id=${id}`, { method: 'DELETE' })
     historyItems = historyItems.filter(p => p.id !== id)
-    if (expandedPostId === id) {
-      expandedPostId = null
-      expandedPost = null
+    if (viewedPostId === id) {
+      viewedPostId = null
+      viewedPost = null
     }
   }
 
@@ -538,6 +576,7 @@
 
   // ── Session persistence ──────────────────────────────────────────
   function scheduleSaveSession() {
+    if (isDemo) return
     if (saveSessionTimer) clearTimeout(saveSessionTimer)
     saveSessionTimer = setTimeout(async () => {
       if (!runId || finalPost) return
@@ -564,6 +603,7 @@
     }, 800)
   }
   function clearSession() {
+    if (isDemo) return
     fetch('/api/session', { method: 'DELETE' }).catch(() => {})
   }
   async function resumeSavedSession() {
@@ -586,8 +626,12 @@
     interruptedScores = s.interruptedScores ?? []
     if (interruptedSources.length > 0)
       checkedSources = new Set(interruptedSources.map((x: Source) => x.url))
-    if (!interrupted && !sourcesInterrupted && runId) canResume = true
     savedSession = null
+    // If paused at an interrupt the UI will show the review panel automatically.
+    // Otherwise kick the pipeline straight back off from the R2 checkpoint.
+    if (!interrupted && !sourcesInterrupted && runId) {
+      await streamResume({ runId })
+    }
   }
   async function discardSession() {
     showResumePrompt = false
@@ -807,7 +851,7 @@
     <div class="hd-left">
       <!-- Mobile: hamburger -->
       <button
-        class="sidebar-toggle"
+        class="sidebar-toggle mobile-toggle"
         onclick={() => (sidebarOpen = !sidebarOpen)}
         aria-label="Toggle history"
       >
@@ -819,18 +863,71 @@
           />
         </svg>
       </button>
+      <!-- Desktop: sidebar collapse toggle -->
+      <button
+        class="sidebar-toggle desktop-toggle"
+        onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
+        aria-label={sidebarCollapsed ? 'Expand history panel' : 'Collapse history panel'}
+        title={sidebarCollapsed ? 'Show history' : 'Hide history'}
+      >
+        {#if sidebarCollapsed}
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fill-rule="evenodd"
+              d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 012 10z"
+              clip-rule="evenodd"
+            />
+          </svg>
+        {:else}
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fill-rule="evenodd"
+              d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 012 10z"
+              clip-rule="evenodd"
+            />
+          </svg>
+        {/if}
+      </button>
       <div class="logo">
-        <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
-          <rect width="28" height="28" rx="8" fill="white" fill-opacity="0.08" />
-          <path
-            d="M19 9.5L17.5 11M17.5 11L10.25 18.25a3 3 0 01-1.265.753L6 20l.533-1.79a3 3 0 01.753-1.264L14.5 9.5M17.5 11L14.5 9.5M19 9.5a1.25 1.25 0 00-1.768-1.768L16 9l2 2 1-1.5z"
-            stroke="white"
-            stroke-width="1.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span>BlogWriter</span>
+        <div class="logo-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
+              fill="url(#logoGrad)"
+              fill-opacity="0.15"
+            />
+            <path
+              d="M17.5 6.5a1.5 1.5 0 00-2.12 0l-7.5 7.5a2.5 2.5 0 00-.63 1.07L6.5 17.5l2.43-.75a2.5 2.5 0 001.07-.63l7.5-7.5a1.5 1.5 0 000-2.12z"
+              stroke="url(#logoGrad)"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M15.5 8.5l2 2"
+              stroke="url(#logoGrad)"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+            <defs>
+              <linearGradient
+                id="logoGrad"
+                x1="6"
+                y1="6"
+                x2="18"
+                y2="18"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#a5b4fc" />
+                <stop offset="1" stop-color="#818cf8" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <span class="logo-name">BlogWriter</span>
+          <span class="logo-tag">AI-powered</span>
+        </div>
       </div>
     </div>
     <div class="hd-right">
@@ -854,7 +951,7 @@
     {/if}
 
     <!-- Sidebar -->
-    <aside class="sidebar" class:open={sidebarOpen}>
+    <aside class="sidebar" class:open={sidebarOpen} class:collapsed={sidebarCollapsed}>
       <div class="sidebar-header">
         <span>Post History</span>
         <button class="sidebar-close" onclick={() => (sidebarOpen = false)} aria-label="Close">
@@ -874,7 +971,7 @@
           <p class="sidebar-empty-txt">No posts yet. Generate one!</p>
         {:else}
           {#each historyItems as item}
-            <div class="history-item" class:expanded={expandedPostId === item.id}>
+            <div class="history-item" class:active={viewedPostId === item.id}>
               <div class="history-item-row">
                 <button class="history-item-btn" onclick={() => expandPost(item.id)}>
                   <span class="hi-title">{item.seoTitle || item.topic}</span>
@@ -887,7 +984,11 @@
                     · {item.format}
                   </span>
                 </button>
-                <button class="hi-delete" onclick={() => deletePost(item.id)}>
+                <button
+                  class="hi-delete"
+                  onclick={() => promptDeletePost(item.id)}
+                  aria-label="Delete post"
+                >
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"
                     ><path
                       fill-rule="evenodd"
@@ -897,35 +998,6 @@
                   >
                 </button>
               </div>
-              {#if expandedPostId === item.id}
-                <div class="history-expanded">
-                  {#if loadingPost}
-                    <span class="spin-sm"></span>
-                  {:else if expandedPost}
-                    <pre class="expanded-post">{expandedPost.post}</pre>
-                    {#if expandedPost.sources?.length}
-                      <p class="exp-section-label">Sources</p>
-                      <ul class="exp-sources">
-                        {#each expandedPost.sources as s}
-                          <li>
-                            <a href={s.url} target="_blank" rel="noopener noreferrer"
-                              >{s.title || s.url}</a
-                            >
-                          </li>
-                        {/each}
-                      </ul>
-                    {/if}
-                    {#if expandedPost.seoMeta}
-                      <p class="exp-section-label">SEO Titles</p>
-                      <ul class="exp-list">
-                        {#each expandedPost.seoMeta.titles as t}<li>{t}</li>{/each}
-                      </ul>
-                      <p class="exp-section-label">Slug</p>
-                      <code class="exp-slug">{expandedPost.seoMeta.slug}</code>
-                    {/if}
-                  {/if}
-                </div>
-              {/if}
             </div>
           {/each}
         {/if}
@@ -934,6 +1006,19 @@
 
     <!-- Main content -->
     <main>
+      {#if isDemo}
+        <div class="demo-banner" role="status">
+          <div class="demo-banner-left">
+            <span class="demo-badge">DEMO</span>
+            <span
+              >This is a simulated run — pre-recorded content, no API calls. Hit Generate to watch
+              it play back.</span
+            >
+          </div>
+          <a href="/login" class="demo-signin-link">Sign in →</a>
+        </div>
+      {/if}
+
       {#if showResumePrompt && savedSession}
         <div class="resume-banner" role="alert">
           <div class="resume-banner-icon">
@@ -954,6 +1039,114 @@
             <button class="discard-btn" onclick={discardSession}>Discard</button>
           </div>
         </div>
+      {/if}
+
+      <!-- Viewed history post -->
+      {#if viewedPostId}
+        <section class="card viewed-post-card">
+          {#if loadingPost}
+            <div class="viewed-post-loading">
+              <span class="spin-sm"></span>
+              <span>Loading post…</span>
+            </div>
+          {:else if viewedPost}
+            <div class="viewed-post-header">
+              <div class="viewed-post-meta">
+                <h2 class="viewed-post-title">
+                  {viewedPost.seoMeta?.titles?.[0] || viewedPost.topic}
+                </h2>
+                <div class="viewed-post-tags">
+                  <span class="vp-badge">{viewedPost.format}</span>
+                  <span class="vp-badge">{viewedPost.tone}</span>
+                  <span class="vp-badge vp-badge-date"
+                    >{new Date(viewedPost.savedAt).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    })}</span
+                  >
+                </div>
+              </div>
+              <div class="viewed-post-header-actions">
+                <button
+                  class="md-toggle"
+                  class:active={!viewedPostRawMode}
+                  onclick={() => (viewedPostRawMode = false)}>Preview</button
+                >
+                <button
+                  class="md-toggle"
+                  class:active={viewedPostRawMode}
+                  onclick={() => (viewedPostRawMode = true)}>Markdown</button
+                >
+                <button
+                  class="viewed-post-close"
+                  onclick={() => {
+                    viewedPostId = null
+                    viewedPost = null
+                    viewedPostRawMode = false
+                  }}
+                  aria-label="Close"
+                >
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
+                    ><path
+                      d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+                    /></svg
+                  >
+                </button>
+              </div>
+            </div>
+            <div class="viewed-post-body">
+              {#if viewedPostRawMode}
+                <pre class="viewed-post-content">{viewedPost.post}</pre>
+              {:else}
+                <div class="viewed-post-content prose">{@html renderMd(viewedPost.post)}</div>
+              {/if}
+            </div>
+            {#if viewedPost.sources?.length || viewedPost.seoMeta}
+              <div class="viewed-post-extras">
+                {#if viewedPost.sources?.length}
+                  <div class="vp-extra-section">
+                    <p class="vp-section-label">Sources</p>
+                    <ul class="vp-sources">
+                      {#each viewedPost.sources as s}
+                        <li>
+                          <a href={s.url} target="_blank" rel="noopener noreferrer"
+                            >{s.title || s.url}</a
+                          >
+                        </li>
+                      {/each}
+                    </ul>
+                  </div>
+                {/if}
+                {#if viewedPost.seoMeta}
+                  <div class="vp-extra-section">
+                    <p class="vp-section-label">SEO</p>
+                    <div class="vp-seo-grid">
+                      {#each viewedPost.seoMeta.titles as t}
+                        <button class="vp-seo-item" onclick={() => copyToClipboard(t)}>{t}</button>
+                      {/each}
+                      <button
+                        class="vp-seo-item vp-seo-slug"
+                        onclick={() => copyToClipboard(viewedPost!.seoMeta!.slug)}
+                      >
+                        <code>{viewedPost.seoMeta.slug}</code>
+                      </button>
+                    </div>
+                    {#if viewedPost.seoMeta.tags?.length}
+                      <div class="vp-tags">
+                        {#each viewedPost.seoMeta.tags as tag}
+                          <button class="tag-chip" onclick={() => copyToClipboard(tag)}
+                            >{tag}</button
+                          >
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          {/if}
+        </section>
       {/if}
 
       <!-- Form card -->
@@ -1078,6 +1271,34 @@
                   <h2>{finalPost ? 'Generated Post' : 'Draft'}</h2>
                   {#if finalPost}
                     <div class="result-actions">
+                      <button
+                        class="md-toggle"
+                        class:active={!draftRawMode}
+                        onclick={() => (draftRawMode = false)}
+                        title="Rendered"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
+                          ><path
+                            d="M2 4a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1zm0 5a1 1 0 011-1h10a1 1 0 110 2H3a1 1 0 01-1-1zm0 5a1 1 0 011-1h6a1 1 0 110 2H3a1 1 0 01-1-1z"
+                          /></svg
+                        >
+                        Preview
+                      </button>
+                      <button
+                        class="md-toggle"
+                        class:active={draftRawMode}
+                        onclick={() => (draftRawMode = true)}
+                        title="Raw markdown"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
+                          ><path
+                            fill-rule="evenodd"
+                            d="M2 5a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1a1 1 0 11-2 0 1 1 0 012 0zM2 13a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zm14 1a1 1 0 11-2 0 1 1 0 012 0z"
+                            clip-rule="evenodd"
+                          /></svg
+                        >
+                        Markdown
+                      </button>
                       {#if sources.length > 0}
                         <details class="sources-detail">
                           <summary>{sources.length} source{sources.length !== 1 ? 's' : ''}</summary
@@ -1122,8 +1343,12 @@
                   {/if}
                 </div>
                 {#if draftHtml}
-                  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-                  <div class="draft-body" onclick={onDraftClick}>{@html draftHtml}</div>
+                  {#if finalPost && !draftRawMode}
+                    <div class="draft-body prose">{@html renderMd(finalPost)}</div>
+                  {:else}
+                    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+                    <div class="draft-body" onclick={onDraftClick}>{@html draftHtml}</div>
+                  {/if}
                   {#if revTooltip}
                     <div class="rev-tooltip" style="left:{revTooltip.x}px;top:{revTooltip.y}px">
                       <p class="rev-tooltip-note">{revTooltip.note}</p>
@@ -1452,11 +1677,40 @@
       {/if}
     </main>
   </div>
+
+  <!-- Delete confirmation dialog -->
+  <Dialog.Root
+    open={!!postToDeleteId}
+    onOpenChange={open => {
+      if (!open) postToDeleteId = null
+    }}
+  >
+    <Dialog.Portal>
+      <Dialog.Overlay class="dialog-overlay" />
+      <Dialog.Content class="dialog-content" aria-describedby="dialog-desc">
+        <div class="dialog-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fill-rule="evenodd"
+              d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
+              clip-rule="evenodd"
+            />
+          </svg>
+        </div>
+        <Dialog.Title class="dialog-title">Delete post?</Dialog.Title>
+        <p id="dialog-desc" class="dialog-desc">
+          This post will be permanently deleted and cannot be recovered.
+        </p>
+        <div class="dialog-actions">
+          <Dialog.Close class="dialog-cancel">Cancel</Dialog.Close>
+          <button class="dialog-confirm" onclick={confirmDeletePost}>Delete</button>
+        </div>
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>
 </div>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
   :global(body) {
     margin: 0;
     overflow-x: hidden;
@@ -1560,13 +1814,15 @@
   }
 
   .sidebar-toggle {
-    display: none;
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.45);
+    color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     padding: 0.375rem;
     border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition:
       color 0.15s,
       background 0.15s;
@@ -1575,15 +1831,61 @@
     color: rgba(255, 255, 255, 0.8);
     background: rgba(255, 255, 255, 0.06);
   }
+  .mobile-toggle {
+    display: none;
+  }
+  .desktop-toggle {
+    display: flex;
+  }
 
   .logo {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.85);
-    letter-spacing: -0.01em;
+    gap: 0.625rem;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.25) 0%,
+      rgba(129, 140, 248, 0.12) 100%
+    );
+    border: 1px solid rgba(129, 140, 248, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .logo-name {
+    font-family: 'DM Sans', 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    background: linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 50%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+  }
+
+  .logo-tag {
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(129, 140, 248, 0.5);
+    line-height: 1;
   }
 
   .user-email {
@@ -1635,6 +1937,16 @@
     position: sticky;
     top: 52px;
     overflow: hidden;
+    transition:
+      width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.28s ease;
+  }
+
+  aside.sidebar.collapsed {
+    width: 0;
+    opacity: 0;
+    border-right-color: transparent;
+    pointer-events: none;
   }
 
   .sidebar-header {
@@ -1669,8 +1981,6 @@
     flex: 1;
     overflow-y: auto;
     padding: 0.75rem;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
   }
 
   .sidebar-empty {
@@ -1691,10 +2001,16 @@
     margin-bottom: 0.5rem;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.02);
-    transition: border-color 0.15s;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
   }
   .history-item:hover {
     border-color: rgba(255, 255, 255, 0.1);
+  }
+  .history-item.active {
+    border-color: rgba(129, 140, 248, 0.35);
+    background: rgba(99, 102, 241, 0.06);
   }
 
   .history-item-row {
@@ -1744,41 +2060,270 @@
     color: #f87171;
   }
 
-  .history-expanded {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 0.75rem;
+  /* ── Viewed post (main area) ─────────────────────── */
+  .viewed-post-card {
+    padding: 0;
+    overflow: hidden;
   }
 
-  .expanded-post {
+  .viewed-post-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 2rem 1.5rem;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 0.85rem;
+  }
+
+  .viewed-post-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .viewed-post-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-shrink: 0;
+  }
+
+  .viewed-post-title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin: 0 0 0.5rem;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+
+  .viewed-post-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  .vp-badge {
     font-size: 0.7rem;
-    line-height: 1.6;
-    color: rgba(255, 255, 255, 0.45);
-    white-space: pre-wrap;
-    max-height: 200px;
+    font-weight: 500;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .vp-badge-date {
+    color: rgba(129, 140, 248, 0.6);
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.12);
+  }
+
+  .viewed-post-close {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    padding: 0.375rem;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+  .viewed-post-close:hover {
+    color: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  .viewed-post-body {
+    padding: 1.5rem;
+    max-height: 520px;
     overflow-y: auto;
-    font-family: Georgia, serif;
+  }
+
+  .viewed-post-content {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.925rem;
+    line-height: 1.8;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: pre-wrap;
     margin: 0;
   }
 
-  .exp-section-label {
+  /* ── Markdown toggle button ───────────────────────── */
+  .md-toggle {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.35);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
+  }
+  .md-toggle:hover {
+    color: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+  .md-toggle.active {
+    color: #a5b4fc;
+    border-color: rgba(129, 140, 248, 0.35);
+    background: rgba(99, 102, 241, 0.08);
+  }
+
+  /* ── Prose (rendered markdown) ───────────────────── */
+  .prose {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.925rem;
+    line-height: 1.8;
+    color: rgba(255, 255, 255, 0.75);
+    white-space: normal;
+  }
+  .prose :global(h1),
+  .prose :global(h2),
+  .prose :global(h3),
+  .prose :global(h4) {
+    font-family: 'DM Sans', 'Inter', sans-serif;
+    color: #f1f5f9;
+    line-height: 1.25;
+    margin: 1.75em 0 0.5em;
+  }
+  .prose :global(h1) {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  .prose :global(h2) {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .prose :global(h3) {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .prose :global(h4) {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .prose :global(p) {
+    margin: 0 0 1em;
+  }
+  .prose :global(p:last-child) {
+    margin-bottom: 0;
+  }
+  .prose :global(strong) {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .prose :global(em) {
+    font-style: italic;
+  }
+  .prose :global(ul),
+  .prose :global(ol) {
+    margin: 0.5em 0 1em;
+    padding-left: 1.5em;
+  }
+  .prose :global(li) {
+    margin-bottom: 0.35em;
+  }
+  .prose :global(li > p) {
+    margin: 0;
+  }
+  .prose :global(blockquote) {
+    border-left: 3px solid rgba(129, 140, 248, 0.4);
+    margin: 1em 0;
+    padding: 0.25em 0 0.25em 1em;
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+  }
+  .prose :global(code) {
+    font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    font-size: 0.82em;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    color: #a5b4fc;
+  }
+  .prose :global(pre) {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 1em 1.25em;
+    overflow-x: auto;
+    margin: 1em 0;
+  }
+  .prose :global(pre code) {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  .prose :global(hr) {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin: 2em 0;
+  }
+  .prose :global(a) {
+    color: #818cf8;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose :global(a:hover) {
+    color: #a5b4fc;
+  }
+
+  .viewed-post-extras {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.015);
+  }
+
+  .vp-extra-section {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+
+  .vp-section-label {
     font-size: 0.65rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.2);
-    margin: 0.75rem 0 0.25rem;
+    color: rgba(255, 255, 255, 0.25);
+    margin: 0 0 0.5rem;
   }
 
-  .exp-sources {
+  .vp-sources {
     list-style: none;
     padding: 0;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.3rem;
   }
-  .exp-sources a {
-    font-size: 0.7rem;
+  .vp-sources a {
+    font-size: 0.78rem;
     color: #818cf8;
     text-decoration: none;
     display: block;
@@ -1786,22 +2331,162 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  .exp-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-  .exp-list li {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.45);
-    line-height: 1.5;
+  .vp-sources a:hover {
+    text-decoration: underline;
   }
 
-  .exp-slug {
-    font-size: 0.7rem;
-    color: #818cf8;
+  .vp-seo-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .vp-seo-item {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.78rem;
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      color 0.15s;
+  }
+  .vp-seo-item:hover {
+    border-color: rgba(129, 140, 248, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .vp-seo-slug code {
     font-family: monospace;
+    color: #818cf8;
+  }
+
+  .vp-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  /* ── Dialog (delete confirm) ──────────────────────── */
+  :global(.dialog-overlay) {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 50;
+    animation: fadeIn 0.15s ease;
+  }
+
+  :global(.dialog-content) {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 51;
+    background: #131929;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 1.75rem;
+    width: min(420px, calc(100vw - 2rem));
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+    animation: scaleIn 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  .dialog-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f87171;
+    margin-bottom: 1rem;
+  }
+
+  :global(.dialog-title) {
+    font-family: 'DM Sans', 'Inter', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.5rem;
+    display: block;
+  }
+
+  .dialog-desc {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin: 0 0 1.5rem;
+    line-height: 1.55;
+  }
+
+  .dialog-actions {
+    display: flex;
+    gap: 0.625rem;
+    justify-content: flex-end;
+  }
+
+  :global(.dialog-cancel) {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      color 0.15s;
+  }
+  :global(.dialog-cancel):hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .dialog-confirm {
+    background: #dc2626;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.5rem 1.125rem;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      box-shadow 0.15s;
+  }
+  .dialog-confirm:hover {
+    background: #b91c1c;
+    box-shadow: 0 4px 16px rgba(220, 38, 38, 0.35);
   }
 
   /* ── Main ────────────────────────────────────────── */
@@ -1838,15 +2523,9 @@
     pointer-events: auto;
   }
 
-  /* Pipeline col: always 280px on the right, never moves */
+  /* Pipeline col: always 280px on the right */
   .pipeline-col {
     flex: 0 0 280px;
-    position: sticky;
-    top: calc(52px + 1.5rem);
-    max-height: calc(100vh - 52px - 3rem);
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.06) transparent;
   }
 
   .pipeline-card {
@@ -1868,6 +2547,7 @@
     margin-bottom: 1.25rem;
   }
   .card-head h1 {
+    font-family: 'DM Sans', 'Inter', sans-serif;
     font-size: 1.1rem;
     font-weight: 700;
     color: #f8fafc;
@@ -1875,6 +2555,7 @@
     margin: 0 0 0.25rem;
   }
   .card-head h2 {
+    font-family: 'DM Sans', 'Inter', sans-serif;
     font-size: 0.95rem;
     font-weight: 600;
     color: #f8fafc;
@@ -1944,7 +2625,7 @@
 
   .options-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 0.75rem;
   }
 
@@ -2337,6 +3018,52 @@
     background: rgba(79, 70, 229, 0.22);
   }
 
+  /* ── Demo banner ─────────────────────────────────── */
+  .demo-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.625rem 1rem;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 10px;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .demo-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+  }
+
+  .demo-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #a5b4fc;
+    flex-shrink: 0;
+  }
+
+  .demo-signin-link {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #a5b4fc;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+  .demo-signin-link:hover {
+    color: #c7d2fe;
+  }
+
   /* ── Resume banner ───────────────────────────────── */
   .resume-banner {
     display: flex;
@@ -2515,7 +3242,7 @@
   }
 
   .draft-body {
-    font-family: Georgia, 'Times New Roman', serif;
+    font-family: 'Lora', Georgia, 'Times New Roman', serif;
     font-size: 0.9375rem;
     line-height: 1.8;
     color: rgba(255, 255, 255, 0.72);
@@ -2851,8 +3578,6 @@
     flex: 1;
     overflow-y: auto;
     padding: 0.75rem 0.875rem;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.06) transparent;
   }
   .popup-list {
     list-style: none;
@@ -2896,7 +3621,7 @@
     font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.5);
     white-space: pre-wrap;
-    font-family: Georgia, serif;
+    font-family: 'Lora', Georgia, serif;
     line-height: 1.6;
     margin: 0;
   }
@@ -2971,8 +3696,11 @@
   }
 
   @media (max-width: 768px) {
-    .sidebar-toggle {
+    .mobile-toggle {
       display: flex;
+    }
+    .desktop-toggle {
+      display: none;
     }
     .sidebar-close {
       display: flex;
@@ -3007,9 +3735,6 @@
       backdrop-filter: blur(2px);
     }
 
-    .options-grid {
-      grid-template-columns: 1fr;
-    }
     .seo-two-col {
       grid-template-columns: 1fr;
     }

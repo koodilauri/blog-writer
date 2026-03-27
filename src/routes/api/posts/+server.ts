@@ -58,7 +58,9 @@ async function requireAuth(cookies: Parameters<RequestHandler>[0]['cookies']): P
 
 export const GET: RequestHandler = async ({ cookies, url, platform }) => {
   if (!(await requireAuth(cookies))) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   const bucket = platform?.env?.R2
@@ -66,18 +68,31 @@ export const GET: RequestHandler = async ({ cookies, url, platform }) => {
 
   if (id) {
     // Fetch a single full post
-    if (!bucket) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 })
+    if (!bucket)
+      return new Response(JSON.stringify({ error: 'Not found' }), {
+        status: 404
+      })
     const obj = await bucket.get(`posts/${id}.json`)
-    if (!obj) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 })
+    if (!obj)
+      return new Response(JSON.stringify({ error: 'Not found' }), {
+        status: 404
+      })
     const data = await obj.json<SavedPost>()
-    return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json' } })
+    return new Response(JSON.stringify(data), {
+      headers: { 'content-type': 'application/json' }
+    })
   }
 
   // List all posts (metadata only via customMetadata)
   if (!bucket)
-    return new Response(JSON.stringify([]), { headers: { 'content-type': 'application/json' } })
+    return new Response(JSON.stringify([]), {
+      headers: { 'content-type': 'application/json' }
+    })
 
-  const listed = await bucket.list({ prefix: 'posts/', include: ['customMetadata'] })
+  const listed = await bucket.list({
+    prefix: 'posts/',
+    include: ['customMetadata']
+  })
   const items: PostListItem[] = listed.objects
     .map(obj => {
       const meta = obj.customMetadata ?? {}
@@ -93,18 +108,24 @@ export const GET: RequestHandler = async ({ cookies, url, platform }) => {
     })
     .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
 
-  return new Response(JSON.stringify(items), { headers: { 'content-type': 'application/json' } })
+  return new Response(JSON.stringify(items), {
+    headers: { 'content-type': 'application/json' }
+  })
 }
 
 export const POST: RequestHandler = async ({ cookies, request, platform }) => {
   if (!(await requireAuth(cookies))) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   const parsed = SavePostSchema.safeParse(await request.json())
   if (!parsed.success) {
     return new Response(
-      JSON.stringify({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }),
+      JSON.stringify({
+        error: parsed.error.issues[0]?.message ?? 'Invalid request'
+      }),
       { status: 400 }
     )
   }
@@ -140,12 +161,16 @@ export const POST: RequestHandler = async ({ cookies, request, platform }) => {
 
 export const DELETE: RequestHandler = async ({ cookies, url, platform }) => {
   if (!(await requireAuth(cookies))) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   const id = url.searchParams.get('id')
   if (!id) {
-    return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'Missing id' }), {
+      status: 400
+    })
   }
 
   const bucket = platform?.env?.R2

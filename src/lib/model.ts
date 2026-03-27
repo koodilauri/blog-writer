@@ -19,5 +19,8 @@ export function getModel(): SupportedModel {
     return new ChatOpenAI({ apiKey, model })
   }
 
-  return new ChatOllama({ baseUrl: 'http://localhost:11434', model: 'llama3.2' })
+  return new ChatOllama({
+    baseUrl: 'http://localhost:11434',
+    model: 'llama3.2'
+  })
 }

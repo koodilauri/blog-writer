@@ -65,7 +65,11 @@ function buildNodeEvent(
       }
     }
     case 'outliner': {
-      return { stage: nodeName, label: baseLabel, outline: output.outline as string | undefined }
+      return {
+        stage: nodeName,
+        label: baseLabel,
+        outline: output.outline as string | undefined
+      }
     }
     case 'writer': {
       const revisionCount = (output.revisionCount as number | undefined) ?? 0
@@ -109,7 +113,9 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
   const token = cookies.get('auth_token')
   if (!token) {
     logger.warn('generate request missing token')
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   try {
@@ -119,14 +125,18 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
       { error: err instanceof Error ? err.message : String(err) },
       'generate request invalid token'
     )
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   const parsed = RequestBodySchema.safeParse(await request.json())
   if (!parsed.success) {
     logger.warn({ issues: parsed.error.issues }, 'generate request invalid body')
     return new Response(
-      JSON.stringify({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }),
+      JSON.stringify({
+        error: parsed.error.issues[0]?.message ?? 'Invalid request'
+      }),
       { status: 400 }
     )
   }
@@ -145,12 +155,17 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     logger.error({ runId, error: message }, 'graph init failed')
-    return new Response(JSON.stringify({ error: 'Server error' }), { status: 500 })
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500
+    })
   }
 
   const llmHandler = new LLMLoggingHandler(logger, runId)
   const encoder = new TextEncoder()
-  const config = { configurable: { thread_id: runId }, callbacks: [llmHandler] }
+  const config = {
+    configurable: { thread_id: runId },
+    callbacks: [llmHandler]
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -194,7 +209,12 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
 
         if (intr?.type === 'outline') {
           logger.info({ runId }, 'graph interrupted at outline')
-          send({ stage: 'interrupt', type: 'outline', content: intr.content, runId })
+          send({
+            stage: 'interrupt',
+            type: 'outline',
+            content: intr.content,
+            runId
+          })
         } else if (intr?.type === 'sources') {
           logger.info({ runId }, 'graph interrupted at source approval')
           send({

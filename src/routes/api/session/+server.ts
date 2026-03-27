@@ -23,22 +23,34 @@ async function requireAuth(cookies: Parameters<RequestHandler>[0]['cookies']): P
 
 export const GET: RequestHandler = async ({ cookies, platform }) => {
   if (!(await requireAuth(cookies))) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   const bucket = platform?.env?.R2
-  if (!bucket) return new Response('null', { headers: { 'content-type': 'application/json' } })
+  if (!bucket)
+    return new Response('null', {
+      headers: { 'content-type': 'application/json' }
+    })
 
   const obj = await bucket.get(SESSION_KEY)
-  if (!obj) return new Response('null', { headers: { 'content-type': 'application/json' } })
+  if (!obj)
+    return new Response('null', {
+      headers: { 'content-type': 'application/json' }
+    })
 
   const text = await obj.text()
-  return new Response(text, { headers: { 'content-type': 'application/json' } })
+  return new Response(text, {
+    headers: { 'content-type': 'application/json' }
+  })
 }
 
 export const PUT: RequestHandler = async ({ cookies, request, platform }) => {
   if (!(await requireAuth(cookies))) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   const body = await request.text()
@@ -55,7 +67,9 @@ export const PUT: RequestHandler = async ({ cookies, request, platform }) => {
 
 export const DELETE: RequestHandler = async ({ cookies, platform }) => {
   if (!(await requireAuth(cookies))) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   const bucket = platform?.env?.R2

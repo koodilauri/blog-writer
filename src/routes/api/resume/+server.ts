@@ -72,7 +72,11 @@ function buildNodeEvent(
       }
     }
     case 'outliner': {
-      return { stage: nodeName, label: baseLabel, outline: output.outline as string | undefined }
+      return {
+        stage: nodeName,
+        label: baseLabel,
+        outline: output.outline as string | undefined
+      }
     }
     case 'writer': {
       const revisionCount = (output.revisionCount as number | undefined) ?? 0
@@ -116,7 +120,9 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
   const token = cookies.get('auth_token')
   if (!token) {
     logger.warn('resume request missing token')
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   try {
@@ -126,14 +132,18 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
       { error: err instanceof Error ? err.message : String(err) },
       'resume request invalid token'
     )
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401
+    })
   }
 
   const parsed = ResumeBodySchema.safeParse(await request.json())
   if (!parsed.success) {
     logger.warn({ issues: parsed.error.issues }, 'resume request invalid body')
     return new Response(
-      JSON.stringify({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }),
+      JSON.stringify({
+        error: parsed.error.issues[0]?.message ?? 'Invalid request'
+      }),
       { status: 400 }
     )
   }
@@ -159,12 +169,17 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     logger.error({ runId, error: message }, 'graph init failed')
-    return new Response(JSON.stringify({ error: 'Server error' }), { status: 500 })
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500
+    })
   }
 
   const llmHandler = new LLMLoggingHandler(logger, runId)
   const encoder = new TextEncoder()
-  const config = { configurable: { thread_id: runId }, callbacks: [llmHandler] }
+  const config = {
+    configurable: { thread_id: runId },
+    callbacks: [llmHandler]
+  }
 
   // Determine input based on what was provided
   let input: Command | null
@@ -204,7 +219,11 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
         approved: remaining.length === 0
       })
       logger.info(
-        { runId, remaining: remaining.length, approved: remaining.length === 0 },
+        {
+          runId,
+          remaining: remaining.length,
+          approved: remaining.length === 0
+        },
         'applied approved notes to state'
       )
     } catch (err) {
@@ -222,7 +241,10 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
       }
 
       try {
-        for await (const event of graph.streamEvents(input, { version: 'v2', ...config })) {
+        for await (const event of graph.streamEvents(input, {
+          version: 'v2',
+          ...config
+        })) {
           const eventType = event.event
           const name = event.name
           const meta = event.metadata as Record<string, unknown> | undefined
@@ -251,7 +273,12 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
 
         if (intr?.type === 'outline') {
           logger.info({ runId }, 'graph interrupted at outline (resume)')
-          send({ stage: 'interrupt', type: 'outline', content: intr.content, runId })
+          send({
+            stage: 'interrupt',
+            type: 'outline',
+            content: intr.content,
+            runId
+          })
         } else if (intr?.type === 'sources') {
           logger.info({ runId }, 'graph interrupted at source approval (resume)')
           send({
