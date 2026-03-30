@@ -2,6 +2,8 @@
 
 An AI-powered blog post generator built with SvelteKit and deployed to Cloudflare Workers. Provide a topic, choose a format and tone, and a multi-agent pipeline researches sources, drafts, fact-checks, and edits the post — with human-in-the-loop review at key stages.
 
+Link to demo https://blog-writer.kata-weekly.workers.dev/generate?demo
+
 ## Features
 
 - **Multi-agent pipeline** — query generation, source fetching & scoring, outlining, writing, fact-checking, editing, and SEO metadata, each as a separate LangGraph node
