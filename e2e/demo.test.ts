@@ -26,14 +26,14 @@ test('demo mode shows history items in sidebar', async ({ page }) => {
   await expect(historyItems.nth(1)).toBeVisible()
 })
 
-test('clicking a history item shows the viewed post card', async ({ page }) => {
+test('clicking a history item navigates to preview page', async ({ page }) => {
   await page.goto('/generate?demo')
   await page.locator('.history-item-btn').first().click()
-  await expect(page.locator('section.viewed-post-card')).toBeVisible()
-  await expect(page.locator('h2.viewed-post-title')).toBeVisible()
+  await expect(page).toHaveURL(/\/preview\/demo-history-\d+\?demo/)
+  await expect(page.locator('h1, h2').first()).toBeVisible()
 })
 
-test('generate with mocked SSE shows pipeline label and post result', async ({ page }) => {
+test('generate with mocked SSE navigates to drafts and shows pipeline', async ({ page }) => {
   await page.route('/api/demo', route => {
     route.fulfill({
       status: 200,
@@ -48,7 +48,7 @@ test('generate with mocked SSE shows pipeline label and post result', async ({ p
   await page.goto('/generate?demo')
   await page.locator('button.generate-btn').click()
 
+  await expect(page).toHaveURL(/\/drafts\/[0-9a-f-]+\?chat=/, { timeout: 5_000 })
   await expect(page.locator('.pipeline-col .pip-label').first()).toBeVisible({ timeout: 15_000 })
   await expect(page.locator('.draft-card-header h2')).toBeVisible({ timeout: 15_000 })
-  await expect(page.locator('.result-actions .md-toggle')).toHaveCount(2)
 })

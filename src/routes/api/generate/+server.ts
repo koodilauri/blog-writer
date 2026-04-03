@@ -15,7 +15,8 @@ const RequestBodySchema = z.object({
   topic: z.string().min(1, 'topic is required'),
   format: z.string().default('blog post'),
   tone: z.string().default('formal and informative'),
-  wordCount: z.string().default('medium (~600 words)')
+  wordCount: z.string().default('medium (~600 words)'),
+  runId: z.string().uuid().optional()
 })
 
 function getSecret() {
@@ -142,7 +143,7 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
   }
 
   const { topic, format, tone, wordCount } = parsed.data
-  const runId = randomUUID()
+  const runId = parsed.data.runId ?? randomUUID()
 
   logger.info({ runId, topic, format, tone }, 'generate request')
 
