@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy, getContext } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import { marked } from 'marked'
@@ -81,21 +81,59 @@
   let firstDraftDone = $state(false)
   let showResumePrompt = $state(false)
   let savedSession = $state<Record<string, unknown> | null>(null)
-  let expandedStageIndex = $state<number | null>(null)
-  let popupAnchor = $state<{ top: number; left: number } | null>(null)
   let lastStageType = $state('')
   let revTooltip = $state<{ note: string; noteIndex: number; x: number; y: number } | null>(null)
   let paused = $state(false)
   let approvedNotes = $state(new Set<number>())
 
   let draftRawMode = $state(false)
-  let userEmail = $state('')
 
   let notFound = $state(false)
 
+  // ── Layout context ───────────────────────────────────────────────
+  type PipelineCtx = {
+    active: boolean
+    stages: StageItem[]
+    running: boolean
+    stalled: boolean
+    paused: boolean
+    runId: string
+    firstDraftDone: boolean
+    writingDraft: string
+    revisionNotes: string[]
+    approvedNotes: Set<number>
+    onRetry: () => void
+    onPause: () => void
+    onResume: () => void
+  }
+  const appCtx = getContext<{ pipeline: PipelineCtx; refreshHistory: () => void }>('app')
+
+  $effect(() => {
+    appCtx.pipeline.active = true
+    appCtx.pipeline.stages = stages
+    appCtx.pipeline.running = running
+    appCtx.pipeline.stalled = stalled
+    appCtx.pipeline.paused = paused
+    appCtx.pipeline.runId = runId
+    appCtx.pipeline.firstDraftDone = firstDraftDone
+    appCtx.pipeline.writingDraft = writingDraft
+    appCtx.pipeline.revisionNotes = revisionNotes
+    appCtx.pipeline.approvedNotes = approvedNotes
+    appCtx.pipeline.onRetry = retryCurrentStep
+    appCtx.pipeline.onPause = pauseGeneration
+    appCtx.pipeline.onResume = resumeFromPause
+  })
+
+  onDestroy(() => {
+    appCtx.pipeline.active = false
+    appCtx.pipeline.stages = []
+    appCtx.pipeline.running = false
+    appCtx.pipeline.paused = false
+    appCtx.pipeline.stalled = false
+  })
+
   onMount(async () => {
     if (isDemo) {
-      userEmail = 'demo@blogwriter.app'
       const stored = sessionStorage.getItem(`draft:${postId}`)
       if (stored) {
         sessionStorage.removeItem(`draft:${postId}`)
@@ -114,7 +152,6 @@
       goto('/login')
       return
     }
-    userEmail = email
 
     // Try sessionStorage first (normal flow)
     const stored = sessionStorage.getItem(`draft:${postId}`)
@@ -135,7 +172,7 @@
       const data = (await sessRes.json()) as Record<string, unknown> | null
       if (data && typeof data.runId === 'string' && data.runId === postId && !data.finalPost) {
         savedSession = data
-        showResumePrompt = true
+        await resumeSavedSession()
         return
       }
     }
@@ -273,7 +310,9 @@
                     sources: event.sources ?? [],
                     seoMeta: event.seoMeta ?? null
                   })
-                }).catch(() => {})
+                })
+                  .then(() => appCtx.refreshHistory())
+                  .catch(() => {})
               }
             } else if (event.stage === 'error') {
               errorMsg = event.error
@@ -637,6 +676,17 @@
   const hasLeftContent = $derived(
     sourcesInterrupted || interrupted || !!(currentDraft || writingDraft)
   )
+
+  // Sources visible during generation (from scorer stage), falls back to final sources
+  const liveSources = $derived(
+    sources.length > 0
+      ? sources
+      : ((
+          stages.findLast(s => s.extra?.type === 'sources')?.extra as
+            | { type: 'sources'; items: Source[] }
+            | undefined
+        )?.items ?? [])
+  )
   const currentActivity = $derived(
     stalled
       ? 'Stalled'
@@ -683,29 +733,6 @@
     }
   }
 
-  // ── Stage popup ──────────────────────────────────────────────────
-  function openStagePopup(index: number, e: MouseEvent) {
-    if (!stages[index]?.extra) return
-    if (expandedStageIndex === index) {
-      expandedStageIndex = null
-      popupAnchor = null
-      return
-    }
-    const itemEl = e.currentTarget as HTMLElement
-    const colEl = itemEl.closest('.pipeline-col')
-    const itemRect = itemEl.getBoundingClientRect()
-    const colRect = colEl?.getBoundingClientRect()
-    expandedStageIndex = index
-    popupAnchor = {
-      top: Math.min(itemRect.top, (typeof window !== 'undefined' ? window.innerHeight : 800) - 340),
-      left: colRect?.left ?? itemRect.left
-    }
-  }
-  function closeStagePopup() {
-    expandedStageIndex = null
-    popupAnchor = null
-  }
-
   async function copyToClipboard(text: string) {
     try {
       await navigator.clipboard.writeText(text)
@@ -715,580 +742,295 @@
   }
 </script>
 
-<div class="app">
-  <div class="bg" aria-hidden="true">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
-  </div>
-  <div class="bg-dots" aria-hidden="true"></div>
-
-  <!-- Header -->
-  <header>
-    <div class="hd-left">
-      <button class="back-btn" onclick={goBack}>
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-          <path
-            fill-rule="evenodd"
-            d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
-            clip-rule="evenodd"
-          />
-        </svg>
-        Back
-      </button>
-      <div class="logo">
-        <div class="logo-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-              fill="url(#logoGrad)"
-              fill-opacity="0.15"
-            />
-            <path
-              d="M17.5 6.5a1.5 1.5 0 00-2.12 0l-7.5 7.5a2.5 2.5 0 00-.63 1.07L6.5 17.5l2.43-.75a2.5 2.5 0 001.07-.63l7.5-7.5a1.5 1.5 0 000-2.12z"
-              stroke="url(#logoGrad)"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M15.5 8.5l2 2"
-              stroke="url(#logoGrad)"
-              stroke-width="1.5"
-              stroke-linecap="round"
-            />
-            <defs>
-              <linearGradient
-                id="logoGrad"
-                x1="6"
-                y1="6"
-                x2="18"
-                y2="18"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop stop-color="#a5b4fc" />
-                <stop offset="1" stop-color="#818cf8" />
-              </linearGradient>
-            </defs>
-          </svg>
+<main>
+  {#if notFound}
+    <div class="not-found-card card">
+      <p class="not-found-msg">Draft not found.</p>
+      <button class="action-btn" onclick={() => goto('/generate')}>← Back to generate</button>
+    </div>
+  {:else}
+    {#if isDemo}
+      <div class="demo-banner" role="status">
+        <div class="demo-banner-left">
+          <span class="demo-badge">DEMO</span>
+          <span>This is a simulated run — pre-recorded content, no API calls.</span>
         </div>
-        <div class="logo-text">
-          <span class="logo-name">BlogWriter</span>
-          <span class="logo-tag">AI-powered</span>
+        <a href="/login" class="demo-signin-link">Sign in →</a>
+      </div>
+    {/if}
+
+    {#if showResumePrompt && savedSession}
+      <div class="resume-banner" role="alert">
+        <div class="resume-banner-icon">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"
+            ><path
+              fill-rule="evenodd"
+              d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
+              clip-rule="evenodd"
+            /></svg
+          >
+        </div>
+        <div class="resume-banner-body">
+          <p class="resume-banner-title">Resume in-progress post?</p>
+          <p class="resume-banner-sub">{(savedSession as any).topic ?? 'Untitled'}</p>
+        </div>
+        <div class="resume-banner-actions">
+          <button class="resume-btn" onclick={resumeSavedSession}>Resume</button>
+          <button class="discard-btn" onclick={discardSession}>Discard</button>
         </div>
       </div>
-    </div>
-    <div class="hd-right">
-      {#if userEmail}
-        <span class="user-email">{userEmail}</span>
-      {/if}
-    </div>
-  </header>
+    {/if}
 
-  <div class="body">
-    <main>
-      {#if notFound}
-        <div class="not-found-card card">
-          <p class="not-found-msg">Draft not found.</p>
-          <button class="action-btn" onclick={() => goto('/generate')}>← Back to generate</button>
-        </div>
-      {:else}
-        {#if isDemo}
-          <div class="demo-banner" role="status">
-            <div class="demo-banner-left">
-              <span class="demo-badge">DEMO</span>
-              <span>This is a simulated run — pre-recorded content, no API calls.</span>
+    {#if stages.length > 0 || running || currentDraft || sourcesInterrupted || interrupted}
+      <div>
+        {#if running && !currentDraft && !writingDraft && !sourcesInterrupted && !interrupted}
+          <!-- Waiting view: show sources as they come in -->
+          <section class="card waiting-card">
+            <div class="waiting-header">
+              <span class="spin-sm"></span>
+              <span class="waiting-label">{currentActivity}</span>
             </div>
-            <a href="/login" class="demo-signin-link">Sign in →</a>
-          </div>
-        {/if}
-
-        {#if showResumePrompt && savedSession}
-          <div class="resume-banner" role="alert">
-            <div class="resume-banner-icon">
-              <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"
-                ><path
-                  fill-rule="evenodd"
-                  d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
-                  clip-rule="evenodd"
-                /></svg
-              >
-            </div>
-            <div class="resume-banner-body">
-              <p class="resume-banner-title">Resume in-progress post?</p>
-              <p class="resume-banner-sub">{(savedSession as any).topic ?? 'Untitled'}</p>
-            </div>
-            <div class="resume-banner-actions">
-              <button class="resume-btn" onclick={resumeSavedSession}>Resume</button>
-              <button class="discard-btn" onclick={discardSession}>Discard</button>
-            </div>
-          </div>
-        {/if}
-
-        <!-- Two-column: left panel + pipeline -->
-        {#if stages.length > 0 || running || currentDraft || sourcesInterrupted || interrupted}
-          <div class="gen-layout" class:has-left={hasLeftContent}>
-            <!-- Left column -->
-            <div class="left-col">
-              {#if sourcesInterrupted}
-                <section class="card">
-                  <div class="card-head">
-                    <h2>Review Sources</h2>
-                    <p>Uncheck sources to remove them, add your own URLs, then approve.</p>
-                  </div>
-                  <ul class="source-list">
-                    {#each interruptedSources as source, i}
-                      {@const score = interruptedScores[i] ?? 3}
-                      <li class="source-item">
-                        <input
-                          type="checkbox"
-                          checked={checkedSources.has(source.url)}
-                          onchange={() => toggleSource(source.url)}
-                          class="source-check"
-                        />
-                        <span
-                          class="score-badge"
-                          class:high={score >= 4}
-                          class:mid={score === 3}
-                          class:low={score < 3}>{score}/5</span
-                        >
-                        <a
-                          href={source.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="source-link">{source.title || source.url}</a
-                        >
-                      </li>
-                    {/each}
-                  </ul>
-                  <div class="field" style="margin-top: 1rem;">
-                    <label for="add-urls">Add URLs (one per line)</label>
-                    <textarea
-                      id="add-urls"
-                      bind:value={addUrlsInput}
-                      rows={3}
-                      placeholder="https://example.com/article"
-                    ></textarea>
-                  </div>
-                  <button
-                    class="action-btn"
-                    onclick={approveSources}
-                    disabled={running || checkedSources.size === 0}
-                  >
-                    {#if running}<span class="spin"></span> Resuming…{:else}Approve & Continue{/if}
-                  </button>
-                </section>
-              {:else if interrupted}
-                <section class="card">
-                  <div class="card-head">
-                    <h2>Review Outline</h2>
-                    <p>Edit below, then continue to start writing.</p>
-                  </div>
-                  <div class="field">
-                    <textarea bind:value={interruptedOutline} rows={18}></textarea>
-                  </div>
-                  <button class="action-btn" onclick={resumeWithOutline} disabled={running}>
-                    {#if running}<span class="spin"></span> Resuming…{:else}Continue with this outline{/if}
-                  </button>
-                </section>
-              {:else if currentDraft || writingDraft}
-                <section class="card draft-card">
-                  <div class="draft-card-header">
-                    <h2>{finalPost ? 'Generated Post' : 'Draft'}</h2>
-                    {#if finalPost}
-                      <div class="result-actions">
-                        <button
-                          class="md-toggle"
-                          class:active={!draftRawMode}
-                          onclick={() => (draftRawMode = false)}
-                          title="Rendered"
-                        >
-                          <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
-                            ><path
-                              d="M2 4a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1zm0 5a1 1 0 011-1h10a1 1 0 110 2H3a1 1 0 01-1-1zm0 5a1 1 0 011-1h6a1 1 0 110 2H3a1 1 0 01-1-1z"
-                            /></svg
-                          >
-                          Preview
-                        </button>
-                        <button
-                          class="md-toggle"
-                          class:active={draftRawMode}
-                          onclick={() => (draftRawMode = true)}
-                          title="Raw markdown"
-                        >
-                          <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
-                            ><path
-                              fill-rule="evenodd"
-                              d="M2 5a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1a1 1 0 11-2 0 1 1 0 012 0zM2 13a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zm14 1a1 1 0 11-2 0 1 1 0 012 0z"
-                              clip-rule="evenodd"
-                            /></svg
-                          >
-                          Markdown
-                        </button>
-                        {#if sources.length > 0}
-                          <details class="sources-detail">
-                            <summary
-                              >{sources.length} source{sources.length !== 1 ? 's' : ''}</summary
-                            >
-                            <div class="sources-popup">
-                              <p class="sources-popup-label">Sources</p>
-                              <ul>
-                                {#each sources as s}
-                                  <li>
-                                    <a href={s.url} target="_blank" rel="noopener noreferrer"
-                                      >{s.title || s.url}</a
-                                    >
-                                  </li>
-                                {/each}
-                              </ul>
-                            </div>
-                          </details>
-                        {/if}
-                        <button class="copy-btn" onclick={() => copyToClipboard(finalPost)}>
-                          <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
-                            ><path
-                              d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
-                            /><path
-                              d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
-                            /></svg
-                          >
-                          Copy
-                        </button>
-                      </div>
-                    {:else if running && !firstDraftDone}
-                      <span class="live-badge"
-                        ><span class="live-dot"></span>Writing first draft…</span
+            {#if liveSources.length > 0}
+              <div class="waiting-sources">
+                <p class="waiting-sources-label">Sources found</p>
+                <ul class="waiting-sources-list">
+                  {#each liveSources as s}
+                    <li>
+                      <a href={s.url} target="_blank" rel="noopener noreferrer"
+                        >{s.title || s.url}</a
                       >
-                    {:else if running}
-                      <span
-                        class="live-badge"
-                        style="color:#a78bfa;border-color:rgba(167,139,250,0.25);background:rgba(167,139,250,0.08)"
-                        ><span class="live-dot" style="background:#a78bfa"></span>Revising…</span
-                      >
-                    {:else if revisionNotes.length > 0}
-                      <span class="revision-badge">revision highlights</span>
-                    {/if}
-                  </div>
-                  {#if draftHtml}
-                    {#if finalPost && !draftRawMode}
-                      <div class="draft-body prose">{@html renderMd(finalPost)}</div>
-                    {:else}
-                      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-                      <div class="draft-body" onclick={onDraftClick}>{@html draftHtml}</div>
-                    {/if}
-                    {#if revTooltip}
-                      <div class="rev-tooltip" style="left:{revTooltip.x}px;top:{revTooltip.y}px">
-                        <p class="rev-tooltip-note">{revTooltip.note}</p>
-                        {#if !approvedNotes.has(revTooltip.noteIndex)}
-                          <button
-                            class="rev-tooltip-approve"
-                            onclick={() => approveNote(revTooltip!.noteIndex)}
-                          >
-                            <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor"
-                              ><path
-                                fill-rule="evenodd"
-                                d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                                clip-rule="evenodd"
-                              /></svg
-                            >
-                            Mark as OK
-                          </button>
-                        {:else}
-                          <span class="rev-tooltip-approved">✓ Approved</span>
-                        {/if}
-                      </div>
-                    {/if}
-                    {#if revisionNotes.length > 0 && !finalPost && firstDraftDone}
-                      <div class="revision-notes">
-                        <p class="revision-notes-label">Revision notes</p>
-                        {#each revisionNotes as note}
-                          <div class="revision-note-item">
-                            <span class="revision-note-bullet">–</span>
-                            <span>{note}</span>
-                          </div>
-                        {/each}
-                      </div>
-                    {/if}
-                    {#if finalPost}
-                      <div class="post-footer">
-                        <span>{finalPost.trim().split(/\s+/).filter(Boolean).length} words</span>
-                        <span>·</span>
-                        <span>{finalPost.length} chars</span>
-                      </div>
-                    {/if}
-                  {:else}
-                    <div class="draft-empty">
-                      <span class="spin-sm"></span>
-                      <span>Writing first draft…</span>
-                    </div>
-                  {/if}
-                </section>
-              {/if}
-            </div>
-
-            <!-- Right: pipeline -->
-            <div class="pipeline-col">
-              <section class="card pipeline-card">
-                <div class="card-head"><h2>Progress</h2></div>
-                <ol class="pipeline">
-                  {#each stages as stage, i}
-                    <li
-                      class="pipeline-item"
-                      class:revision={stage.isRevision}
-                      class:has-extra={!!stage.extra}
-                      class:active-popup={expandedStageIndex === i}
-                      class:done-item={stage.isDone}
-                      role={stage.extra ? 'button' : undefined}
-                      tabindex={stage.extra ? 0 : undefined}
-                      onclick={(e: MouseEvent) => openStagePopup(i, e)}
-                      onkeydown={stage.extra
-                        ? (e: KeyboardEvent) =>
-                            (e.key === 'Enter' || e.key === ' ') &&
-                            openStagePopup(i, e as unknown as MouseEvent)
-                        : undefined}
-                    >
-                      <span
-                        class="pip-dot"
-                        class:done={!stage.isDone}
-                        class:complete={stage.isDone}
-                      ></span>
-                      <div class="pip-content">
-                        <span class="pip-label">{stage.label}</span>
-                        {#if stage.detail}
-                          <span
-                            class="pip-detail"
-                            class:approved={stage.detail.startsWith('✓')}
-                            class:rejected={stage.detail.startsWith('✗')}>{stage.detail}</span
-                          >
-                        {/if}
-                        {#if stage.preview}
-                          <p class="pip-preview">{stage.preview}</p>
-                        {/if}
-                      </div>
-                      {#if stage.extra}
-                        <span class="pip-expand-icon">
-                          <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"
-                            ><path
-                              fill-rule="evenodd"
-                              d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-                              clip-rule="evenodd"
-                            /></svg
-                          >
-                        </span>
-                      {/if}
                     </li>
                   {/each}
-                  {#if running}
-                    <li class="pipeline-item working">
-                      <span class="pip-dot spinning"></span>
-                      <div class="pip-content">
-                        <span class="pip-label">{currentActivity}</span>
-                        {#if writingDraft && firstDraftDone}
-                          <p class="pip-stream">{writingDraft.slice(-300)}</p>
-                        {/if}
+                </ul>
+              </div>
+            {/if}
+          </section>
+        {:else if sourcesInterrupted}
+          <section class="card review-sources-card">
+            <div class="card-head">
+              <h2>Review Sources</h2>
+              <p>Uncheck sources to remove them, add your own URLs, then approve.</p>
+            </div>
+            <ul class="source-list">
+              {#each interruptedSources as source, i}
+                {@const score = interruptedScores[i] ?? 3}
+                <li class="source-item">
+                  <input
+                    type="checkbox"
+                    checked={checkedSources.has(source.url)}
+                    onchange={() => toggleSource(source.url)}
+                    class="source-check"
+                  />
+                  <span
+                    class="score-badge"
+                    class:high={score >= 4}
+                    class:mid={score === 3}
+                    class:low={score < 3}>{score}/5</span
+                  >
+                  <a href={source.url} target="_blank" rel="noopener noreferrer" class="source-link"
+                    >{source.title || source.url}</a
+                  >
+                </li>
+              {/each}
+            </ul>
+            <div class="field" style="margin-top: 1rem;">
+              <label for="add-urls">Add URLs (one per line)</label>
+              <textarea
+                id="add-urls"
+                bind:value={addUrlsInput}
+                rows={3}
+                placeholder="https://example.com/article"
+              ></textarea>
+            </div>
+            <button
+              class="action-btn"
+              onclick={approveSources}
+              disabled={running || checkedSources.size === 0}
+            >
+              {#if running}<span class="spin"></span> Resuming…{:else}Approve & Continue{/if}
+            </button>
+          </section>
+        {:else if interrupted}
+          <section class="card">
+            <div class="card-head">
+              <h2>Review Outline</h2>
+              <p>Edit below, then continue to start writing.</p>
+            </div>
+            <div class="field">
+              <textarea bind:value={interruptedOutline} rows={18}></textarea>
+            </div>
+            <button class="action-btn" onclick={resumeWithOutline} disabled={running}>
+              {#if running}<span class="spin"></span> Resuming…{:else}Continue with this outline{/if}
+            </button>
+          </section>
+        {:else if currentDraft || writingDraft}
+          <section class="card draft-card">
+            <div class="draft-card-header">
+              <h2>{finalPost ? 'Generated Post' : 'Draft'}</h2>
+              {#if finalPost}
+                <div class="result-actions">
+                  <button
+                    class="md-toggle"
+                    class:active={!draftRawMode}
+                    onclick={() => (draftRawMode = false)}
+                    title="Rendered"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
+                      ><path
+                        d="M2 4a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1zm0 5a1 1 0 011-1h10a1 1 0 110 2H3a1 1 0 01-1-1zm0 5a1 1 0 011-1h6a1 1 0 110 2H3a1 1 0 01-1-1z"
+                      /></svg
+                    >
+                    Preview
+                  </button>
+                  <button
+                    class="md-toggle"
+                    class:active={draftRawMode}
+                    onclick={() => (draftRawMode = true)}
+                    title="Raw markdown"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
+                      ><path
+                        fill-rule="evenodd"
+                        d="M2 5a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1a1 1 0 11-2 0 1 1 0 012 0zM2 13a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zm14 1a1 1 0 11-2 0 1 1 0 012 0z"
+                        clip-rule="evenodd"
+                      /></svg
+                    >
+                    Markdown
+                  </button>
+                  {#if sources.length > 0}
+                    <details class="sources-detail">
+                      <summary>{sources.length} source{sources.length !== 1 ? 's' : ''}</summary>
+                      <div class="sources-popup">
+                        <p class="sources-popup-label">Sources</p>
+                        <ul>
+                          {#each sources as s}
+                            <li>
+                              <a href={s.url} target="_blank" rel="noopener noreferrer"
+                                >{s.title || s.url}</a
+                              >
+                            </li>
+                          {/each}
+                        </ul>
                       </div>
-                    </li>
+                    </details>
                   {/if}
-                </ol>
-                {#if running && stalled}
-                  <div class="stall-notice">
-                    <span>Stalled — API not responding.</span>
-                    <button class="retry-btn" onclick={retryCurrentStep}>
-                      <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"
+                  <button class="copy-btn" onclick={() => copyToClipboard(finalPost)}>
+                    <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
+                      ><path
+                        d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
+                      /><path
+                        d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
+                      /></svg
+                    >
+                    Copy
+                  </button>
+                </div>
+              {:else if running && !firstDraftDone}
+                <span class="live-badge"><span class="live-dot"></span>Writing first draft…</span>
+              {:else if running}
+                <span
+                  class="live-badge"
+                  style="color:#a78bfa;border-color:rgba(167,139,250,0.25);background:rgba(167,139,250,0.08)"
+                  ><span class="live-dot" style="background:#a78bfa"></span>Revising…</span
+                >
+              {:else if revisionNotes.length > 0}
+                <span class="revision-badge">revision highlights</span>
+              {/if}
+            </div>
+            {#if draftHtml}
+              {#if finalPost && !draftRawMode}
+                <div class="draft-body prose">{@html renderMd(finalPost)}</div>
+              {:else}
+                <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+                <div class="draft-body" onclick={onDraftClick}>{@html draftHtml}</div>
+              {/if}
+              {#if revTooltip}
+                <div class="rev-tooltip" style="left:{revTooltip.x}px;top:{revTooltip.y}px">
+                  <p class="rev-tooltip-note">{revTooltip.note}</p>
+                  {#if !approvedNotes.has(revTooltip.noteIndex)}
+                    <button
+                      class="rev-tooltip-approve"
+                      onclick={() => approveNote(revTooltip!.noteIndex)}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor"
                         ><path
                           fill-rule="evenodd"
-                          d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
+                          d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
                           clip-rule="evenodd"
                         /></svg
                       >
-                      Retry
+                      Mark as OK
                     </button>
-                  </div>
-                {/if}
-                {#if running && !stalled}
-                  <button class="pause-btn" onclick={pauseGeneration}>
-                    <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"
-                      ><rect x="4" y="3" width="4" height="14" rx="1" /><rect
-                        x="12"
-                        y="3"
-                        width="4"
-                        height="14"
-                        rx="1"
-                      /></svg
-                    >
-                    Pause
-                  </button>
-                {/if}
-                {#if paused && runId}
-                  {@const allApproved =
-                    revisionNotes.length > 0 && approvedNotes.size >= revisionNotes.length}
-                  <div class="paused-notice" class:all-approved={allApproved}>
-                    {#if allApproved}
-                      <span>All notes approved — will skip to final editing.</span>
-                    {:else if approvedNotes.size > 0}
-                      <span
-                        >{approvedNotes.size} note{approvedNotes.size !== 1 ? 's' : ''} approved.
-                        Click highlighted text to approve more.</span
-                      >
-                    {:else if revisionNotes.length > 0}
-                      <span>Paused. Click highlighted text to approve notes.</span>
-                    {:else}
-                      <span>Paused.</span>
-                    {/if}
-                    <button class="resume-pause-btn" onclick={resumeFromPause}>
-                      <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"
-                        ><path
-                          d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
-                        /></svg
-                      >
-                      Resume
-                    </button>
-                  </div>
-                {/if}
-              </section>
-            </div>
-          </div>
-        {/if}
-
-        <!-- Error -->
-        {#if errorMsg}
-          <div class="error-banner" role="alert">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
-              ><path
-                fill-rule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.5a.75.75 0 001.5 0v-4.5zm-.75 7.5a.75.75 0 100-1.5.75.75 0 000 1.5z"
-                clip-rule="evenodd"
-              /></svg
-            >
-            <div>
-              <span>{errorMsg}</span>
-              {#if canResume && !running}
-                <button class="resume-link" onclick={resumeFromCheckpoint}
-                  >Resume from last checkpoint</button
-                >
-              {/if}
-            </div>
-          </div>
-        {/if}
-
-        <!-- Stage detail popup -->
-        {#if expandedStageIndex !== null && stages[expandedStageIndex]?.extra && popupAnchor}
-          {@const popStage = stages[expandedStageIndex]}
-          {@const popExtra = popStage.extra!}
-          <div
-            class="stage-popup-backdrop"
-            role="presentation"
-            onclick={closeStagePopup}
-            onkeydown={e => e.key === 'Escape' && closeStagePopup()}
-          ></div>
-          <div
-            class="stage-popup"
-            style="top:{popupAnchor.top}px;right:calc(100vw - {popupAnchor.left}px + 12px)"
-          >
-            <div class="stage-popup-header">
-              <span class="stage-popup-title">{popStage.label}</span>
-              <button class="stage-popup-close" onclick={closeStagePopup} aria-label="Close">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
-                  ><path
-                    d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-                  /></svg
-                >
-              </button>
-            </div>
-            <div class="stage-popup-body">
-              {#if popExtra.type === 'list'}
-                <ul class="popup-list">
-                  {#each popExtra.items as item}<li>{item}</li>{/each}
-                </ul>
-              {:else if popExtra.type === 'sources'}
-                <ul class="popup-sources">
-                  {#each popExtra.items as src}
-                    <li>
-                      <a href={src.url} target="_blank" rel="noopener noreferrer"
-                        >{src.title || src.url}</a
-                      >
-                    </li>
-                  {/each}
-                </ul>
-              {:else if popExtra.type === 'markdown'}
-                <pre class="popup-markdown">{popExtra.content}</pre>
-              {:else if popExtra.type === 'seo'}
-                <div class="popup-seo">
-                  <p class="popup-seo-label">Titles</p>
-                  {#each popExtra.meta.titles as t}<p class="popup-seo-val">{t}</p>{/each}
-                  <p class="popup-seo-label">Slug</p>
-                  <code class="popup-seo-val" style="font-family:monospace"
-                    >{popExtra.meta.slug}</code
-                  >
-                  <p class="popup-seo-label">Tags</p>
-                  <div class="popup-seo-tags">
-                    {#each popExtra.meta.tags as tag}<span class="tag-chip">{tag}</span>{/each}
-                  </div>
+                  {:else}
+                    <span class="rev-tooltip-approved">✓ Approved</span>
+                  {/if}
                 </div>
               {/if}
-            </div>
-          </div>
+              {#if revisionNotes.length > 0 && !finalPost && firstDraftDone}
+                <div class="revision-notes">
+                  <p class="revision-notes-label">Revision notes</p>
+                  {#each revisionNotes as note}
+                    <div class="revision-note-item">
+                      <span class="revision-note-bullet">–</span>
+                      <span>{note}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+              {#if finalPost}
+                <div class="post-footer">
+                  <span>{finalPost.trim().split(/\s+/).filter(Boolean).length} words</span>
+                  <span>·</span>
+                  <span>{finalPost.length} chars</span>
+                </div>
+              {/if}
+            {:else}
+              <div class="draft-empty">
+                <span class="spin-sm"></span>
+                <span>Writing first draft…</span>
+              </div>
+            {/if}
+          </section>
         {/if}
+      </div>
+    {/if}
 
-        <!-- SEO (shown after generation completes) -->
-        {#if finalPost && seoMeta}
-          <section class="card">
-            <div class="card-head">
-              <h2>SEO Metadata</h2>
-              <p>Click any item to copy.</p>
-            </div>
+    <!-- Error -->
+    {#if errorMsg}
+      <div class="error-banner" role="alert">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
+          ><path
+            fill-rule="evenodd"
+            d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.5a.75.75 0 001.5 0v-4.5zm-.75 7.5a.75.75 0 100-1.5.75.75 0 000 1.5z"
+            clip-rule="evenodd"
+          /></svg
+        >
+        <div>
+          <span>{errorMsg}</span>
+          {#if canResume && !running}
+            <button class="resume-link" onclick={resumeFromCheckpoint}
+              >Resume from last checkpoint</button
+            >
+          {/if}
+        </div>
+      </div>
+    {/if}
 
-            <div class="seo-section">
-              <p class="seo-label">Title options</p>
-              <ul class="seo-titles">
-                {#each seoMeta.titles as title}
-                  <li>
-                    <button class="seo-copy-row" onclick={() => copyToClipboard(title)}>
-                      <span>{title}</span>
-                      <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"
-                        ><path
-                          d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
-                        /><path
-                          d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
-                        /></svg
-                      >
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            </div>
+    <!-- SEO (shown after generation completes) -->
+    {#if finalPost && seoMeta}
+      <section class="card">
+        <div class="card-head">
+          <h2>SEO Metadata</h2>
+          <p>Click any item to copy.</p>
+        </div>
 
-            <div class="seo-section">
-              <p class="seo-label">
-                Meta description <span class="seo-count"
-                  >({seoMeta.metaDescription.length} chars)</span
-                >
-              </p>
-              <button
-                class="seo-copy-row"
-                onclick={() => copyToClipboard(seoMeta!.metaDescription)}
-              >
-                <span class="seo-desc">{seoMeta.metaDescription}</span>
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  style="flex-shrink:0;margin-top:2px"
-                  ><path
-                    d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
-                  /><path
-                    d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
-                  /></svg
-                >
-              </button>
-            </div>
-
-            <div class="seo-two-col">
-              <div class="seo-section">
-                <p class="seo-label">Slug</p>
-                <button class="seo-copy-row" onclick={() => copyToClipboard(seoMeta!.slug)}>
-                  <code class="seo-slug">{seoMeta.slug}</code>
+        <div class="seo-section">
+          <p class="seo-label">Title options</p>
+          <ul class="seo-titles">
+            {#each seoMeta.titles as title}
+              <li>
+                <button class="seo-copy-row" onclick={() => copyToClipboard(title)}>
+                  <span>{title}</span>
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"
                     ><path
                       d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
@@ -1297,22 +1039,59 @@
                     /></svg
                   >
                 </button>
-              </div>
-              <div class="seo-section">
-                <p class="seo-label">Tags</p>
-                <div class="seo-tags">
-                  {#each seoMeta.tags as tag}
-                    <button class="tag-chip" onclick={() => copyToClipboard(tag)}>{tag}</button>
-                  {/each}
-                </div>
-              </div>
+              </li>
+            {/each}
+          </ul>
+        </div>
+
+        <div class="seo-section">
+          <p class="seo-label">
+            Meta description <span class="seo-count">({seoMeta.metaDescription.length} chars)</span>
+          </p>
+          <button class="seo-copy-row" onclick={() => copyToClipboard(seoMeta!.metaDescription)}>
+            <span class="seo-desc">{seoMeta.metaDescription}</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              style="flex-shrink:0;margin-top:2px"
+              ><path
+                d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
+              /><path
+                d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
+              /></svg
+            >
+          </button>
+        </div>
+
+        <div class="seo-two-col">
+          <div class="seo-section">
+            <p class="seo-label">Slug</p>
+            <button class="seo-copy-row" onclick={() => copyToClipboard(seoMeta!.slug)}>
+              <code class="seo-slug">{seoMeta.slug}</code>
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"
+                ><path
+                  d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
+                /><path
+                  d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
+                /></svg
+              >
+            </button>
+          </div>
+          <div class="seo-section">
+            <p class="seo-label">Tags</p>
+            <div class="seo-tags">
+              {#each seoMeta.tags as tag}
+                <button class="tag-chip" onclick={() => copyToClipboard(tag)}>{tag}</button>
+              {/each}
             </div>
-          </section>
-        {/if}
-      {/if}
-    </main>
-  </div>
-</div>
+          </div>
+        </div>
+      </section>
+    {/if}
+  {/if}
+</main>
 
 <style>
   :global(body) {
@@ -1552,6 +1331,53 @@
     border-radius: 14px;
     padding: 1.5rem;
   }
+
+  /* ── Waiting / sources-found view ─────────────────── */
+  .waiting-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .waiting-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.85rem;
+  }
+  .waiting-label {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.85rem;
+  }
+  .waiting-sources-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.2);
+    margin: 0 0 0.6rem;
+  }
+  .waiting-sources-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .waiting-sources-list a {
+    font-size: 0.82rem;
+    color: #818cf8;
+    text-decoration: none;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .waiting-sources-list a:hover {
+    text-decoration: underline;
+  }
+
   .card-head {
     margin-bottom: 1.25rem;
   }

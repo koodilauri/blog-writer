@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import Select from '$lib/components/ui/Select.svelte'
@@ -22,8 +23,24 @@
   let format = $state('blog post')
   let tone = $state('formal and informative')
   let wordCount = $state('medium (~600 words)')
+  let resumeRunId = $state<string | null>(null)
+  let resumeTopic = $state('')
 
   const isDemo = $derived(page.url.searchParams.has('demo'))
+
+  onMount(async () => {
+    if (isDemo && !topic) topic = 'How AI coding assistants are changing software development'
+    if (!isDemo) {
+      const res = await fetch('/api/session')
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown> | null
+        if (data && typeof data.runId === 'string' && !data.finalPost) {
+          resumeRunId = data.runId
+          resumeTopic = typeof data.topic === 'string' ? data.topic : ''
+        }
+      }
+    }
+  })
 
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault()
@@ -35,6 +52,31 @@
 </script>
 
 <main>
+  {#if resumeRunId}
+    <div class="resume-banner">
+      <div class="resume-banner-left">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          style="flex-shrink:0;color:#818cf8"
+        >
+          <path
+            fill-rule="evenodd"
+            d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z"
+            clip-rule="evenodd"
+          />
+        </svg>
+        <div>
+          <span class="resume-title">Unfinished draft</span>
+          {#if resumeTopic}<span class="resume-topic">{resumeTopic}</span>{/if}
+        </div>
+      </div>
+      <a href="/drafts/{resumeRunId}?chat={resumeRunId}" class="resume-link">Continue →</a>
+    </div>
+  {/if}
+
   {#if isDemo}
     <div class="demo-banner" role="status">
       <div class="demo-banner-left">
@@ -235,6 +277,51 @@
   .generate-btn:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+
+  /* ── Resume banner ───────────────────────────────── */
+  .resume-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.625rem 1rem;
+    background: rgba(129, 140, 248, 0.06);
+    border: 1px solid rgba(129, 140, 248, 0.18);
+    border-radius: 10px;
+    font-size: 0.82rem;
+  }
+  .resume-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+  }
+  .resume-title {
+    display: block;
+    font-weight: 600;
+    color: #a5b4fc;
+    font-size: 0.8rem;
+  }
+  .resume-topic {
+    display: block;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.76rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .resume-link {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #818cf8;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+  .resume-link:hover {
+    color: #a5b4fc;
   }
 
   /* ── Demo banner ─────────────────────────────────── */

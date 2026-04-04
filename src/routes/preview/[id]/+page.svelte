@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
+  import { getContext } from 'svelte'
   import { Dialog } from 'bits-ui'
   import { marked } from 'marked'
 
@@ -19,6 +20,7 @@
   }
 
   const { data } = $props<{ data: { post: SavedPost } }>()
+  const { refreshHistory } = getContext<{ refreshHistory: () => void }>('app')
 
   let rawMode = $state(false)
   let showDeleteDialog = $state(false)
@@ -37,6 +39,7 @@
 
   async function confirmDelete() {
     await fetch(`/api/posts?id=${data.post.id}`, { method: 'DELETE' })
+    refreshHistory()
     goto('/generate')
   }
 </script>

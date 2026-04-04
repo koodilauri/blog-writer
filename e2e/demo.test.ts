@@ -49,6 +49,5 @@ test('generate with mocked SSE navigates to drafts and shows pipeline', async ({
   await page.locator('button.generate-btn').click()
 
   await expect(page).toHaveURL(/\/drafts\/[0-9a-f-]+\?chat=/, { timeout: 5_000 })
-  await expect(page.locator('.pipeline-col .pip-label').first()).toBeVisible({ timeout: 15_000 })
-  await expect(page.locator('.draft-card-header h2')).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.sidebar-pipeline').first()).toBeVisible({ timeout: 15_000 })
 })

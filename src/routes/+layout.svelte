@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, setContext } from 'svelte'
-  import { goto, onNavigate } from '$app/navigation'
+  import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import './layout.css'
   import favicon from '$lib/assets/favicon.svg'
@@ -39,17 +39,6 @@
     refreshHistory: () => void
   }
 
-  // ── View transitions ─────────────────────────────────────────────────────
-  onNavigate(navigation => {
-    if (!document.startViewTransition) return
-    return new Promise(resolve => {
-      document.startViewTransition(async () => {
-        resolve()
-        await navigation.complete
-      })
-    })
-  })
-
   // ── Shell state ──────────────────────────────────────────────────────────
   let userEmail = $state('')
   let historyOpen = $state(false)
@@ -60,6 +49,7 @@
 
   let pipelineOpen = $state(false)
   let expandedPipelineIdx = $state<number | null>(null)
+  let userClosedPipeline = $state(false)
 
   // Reactive context object — the drafts page writes into this
   const pipeline = $state({
@@ -92,13 +82,14 @@
       pipeline.approvedNotes.size >= pipeline.revisionNotes.length
   )
 
-  // Auto-open the pipeline panel the moment generation starts
+  // Auto-open the pipeline panel the moment generation starts (unless user explicitly closed it)
   $effect(() => {
-    if (pipeline.active && pipeline.running && !pipelineOpen) {
+    if (pipeline.active && pipeline.running && !pipelineOpen && !userClosedPipeline) {
       pipelineOpen = true
     }
     if (!pipeline.active) {
       expandedPipelineIdx = null
+      userClosedPipeline = false
     }
   })
 
@@ -259,31 +250,6 @@
       </div>
 
       <div class="hd-right">
-        <!-- Pipeline toggle — only when a draft is being generated -->
-        {#if pipeline.active}
-          <button
-            class="pipeline-toggle"
-            class:pip-open={pipelineOpen}
-            class:pip-live={pipeline.running}
-            onclick={() => (pipelineOpen = !pipelineOpen)}
-            title={pipelineOpen ? 'Hide pipeline' : 'Show pipeline progress'}
-            aria-label="Toggle pipeline panel"
-          >
-            {#if pipeline.running}
-              <span class="pip-live-dot"></span>
-            {:else}
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fill-rule="evenodd"
-                  d="M2 3.75A.75.75 0 012.75 3h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 3.75zm0 4.5A.75.75 0 012.75 7.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 8.25zm0 4.5A.75.75 0 012.75 12h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 12.75zm0 4.5A.75.75 0 012.75 16.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 17.25z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-            {/if}
-            Pipeline
-          </button>
-        {/if}
-
         <a href="/generate{isDemo ? '?demo' : ''}" class="new-post-btn" title="Start a new post">
           <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
             <path
@@ -385,15 +351,28 @@
 
       <!-- ── Right sidebar: Pipeline progress ────────────────────────── -->
       {#if pipeline.active}
-        {#if pipelineOpen}
-          <div
-            class="sidebar-backdrop pipeline-backdrop"
-            role="button"
-            tabindex="-1"
-            onclick={() => (pipelineOpen = false)}
-            onkeydown={e => e.key === 'Escape' && (pipelineOpen = false)}
-          ></div>
-        {/if}
+        <!-- Tab toggle — always visible, outside the collapsible aside -->
+        <button
+          class="pip-tab"
+          class:pip-tab-live={pipeline.running}
+          onclick={() => {
+            pipelineOpen = !pipelineOpen
+            if (!pipelineOpen) userClosedPipeline = true
+          }}
+          title={pipelineOpen ? 'Hide pipeline' : 'Show pipeline progress'}
+          aria-label="Toggle pipeline panel"
+        >
+          {#if pipeline.running}
+            <span class="pip-live-dot"></span>
+          {/if}
+          <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor" style="flex-shrink:0">
+            <path
+              fill-rule="evenodd"
+              d="M2 3.75A.75.75 0 012.75 3h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 3.75zm0 4.5A.75.75 0 012.75 7.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 8.25zm0 4.5A.75.75 0 012.75 12h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 12.75zm0 4.5A.75.75 0 012.75 16.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 17.25z"
+              clip-rule="evenodd"
+            />
+          </svg>
+        </button>
 
         <aside
           class="sidebar sidebar-pipeline"
@@ -402,17 +381,6 @@
         >
           <div class="sidebar-header">
             <span>Pipeline</span>
-            <button
-              class="sidebar-close"
-              onclick={() => (pipelineOpen = false)}
-              aria-label="Close pipeline"
-            >
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-                />
-              </svg>
-            </button>
           </div>
 
           <div class="pipeline-body">
@@ -776,33 +744,31 @@
     line-height: 1;
   }
 
-  /* Pipeline toggle */
-  .pipeline-toggle {
+  /* ── Pipeline sidebar edge tab ─────────────────────────────────────── */
+  .pip-tab {
+    width: 28px;
+    min-width: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.3rem 0.65rem;
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.22);
-    border-radius: 6px;
-    color: #818cf8;
-    font-size: 0.78rem;
-    font-weight: 500;
+    justify-content: center;
+    gap: 5px;
+    padding: 0.55rem 0;
+    background: rgba(15, 21, 35, 0.92);
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
+    color: #475569;
     cursor: pointer;
-    transition:
-      background 0.15s,
-      border-color 0.15s,
-      color 0.15s;
-    font-family: inherit;
   }
-  .pipeline-toggle:hover {
-    background: rgba(99, 102, 241, 0.18);
-    border-color: rgba(99, 102, 241, 0.38);
-    color: #a5b4fc;
+  .pip-tab:hover {
+    color: #94a3b8;
+    background: rgba(20, 28, 46, 0.96);
   }
-  .pipeline-toggle.pip-open {
-    background: rgba(99, 102, 241, 0.2);
-    border-color: rgba(99, 102, 241, 0.42);
+  .pip-tab-live {
+    color: #818cf8;
+    border-color: rgba(99, 102, 241, 0.3);
   }
   .pip-live-dot {
     width: 6px;
@@ -930,13 +896,11 @@
     width: 256px;
     min-width: 256px;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
-    transition:
-      width 0.2s ease,
-      min-width 0.2s ease;
   }
   .sidebar-history.collapsed {
     width: 0;
     min-width: 0;
+    overflow: hidden;
   }
 
   .sidebar-body {
@@ -960,7 +924,6 @@
   }
   .history-item {
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-    transition: background 0.1s;
   }
   .history-item:hover {
     background: rgba(255, 255, 255, 0.025);
@@ -987,7 +950,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     margin-bottom: 2px;
-    transition: color 0.12s;
   }
   .history-item-btn:hover .hi-title {
     color: #cbd5e1;
@@ -1028,9 +990,8 @@
     width: 0;
     min-width: 0;
     border-left: 1px solid rgba(255, 255, 255, 0.05);
-    transition:
-      width 0.22s ease,
-      min-width 0.22s ease;
+    overflow: hidden;
+    position: relative;
   }
   .sidebar-pipeline.open {
     width: 284px;
@@ -1079,7 +1040,6 @@
     text-align: left;
     cursor: default;
     border-radius: 6px;
-    transition: background 0.12s;
     font-family: inherit;
   }
   .pip-row:not(:disabled) {
@@ -1358,9 +1318,6 @@
     padding: 0;
     display: block;
   }
-  .pipeline-backdrop {
-    z-index: 35;
-  }
 
   /* ── Global spinners (used by child pages) ─────────────────────────── */
   :global(.spin) {
@@ -1504,7 +1461,6 @@
       width: 280px !important;
       min-width: 280px !important;
       transform: translateX(-100%);
-      transition: transform 0.25s ease;
     }
     .sidebar-history.open {
       transform: translateX(0);
@@ -1519,10 +1475,11 @@
       width: 284px !important;
       min-width: 284px !important;
       transform: translateX(100%);
-      transition: transform 0.25s ease;
+      overflow: hidden;
     }
     .sidebar-pipeline.open {
       transform: translateX(0);
+      overflow: visible;
     }
   }
 
@@ -1536,15 +1493,6 @@
       gap: 0;
     }
     .new-post-btn svg {
-      margin: 0;
-    }
-    .pipeline-toggle {
-      padding: 0.3rem 0.5rem;
-      font-size: 0;
-      gap: 0;
-    }
-    .pipeline-toggle svg,
-    .pipeline-toggle .pip-live-dot {
       margin: 0;
     }
   }
