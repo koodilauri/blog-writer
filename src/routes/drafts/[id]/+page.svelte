@@ -33,6 +33,7 @@
     | { stage: 'outliner'; label: string; outline?: string }
     | { stage: 'writer'; label: string; revisionCount?: number; changes?: string[] }
     | { stage: 'writer_token'; token: string }
+    | { stage: 'thinking_token'; node: string; token: string }
     | {
         stage: 'fact_checker'
         label: string
@@ -79,6 +80,8 @@
   let currentDraft = $state('')
   let revisionNotes = $state<string[]>([])
   let firstDraftDone = $state(false)
+  let thinkingNode = $state<string | null>(null)
+  let thinkingBuffer = $state('')
   let showResumePrompt = $state(false)
   let savedSession = $state<Record<string, unknown> | null>(null)
   let lastStageType = $state('')
@@ -117,6 +120,8 @@
     appCtx.pipeline.runId = runId
     appCtx.pipeline.firstDraftDone = firstDraftDone
     appCtx.pipeline.writingDraft = writingDraft
+    appCtx.pipeline.thinkingNode = thinkingNode ?? ''
+    appCtx.pipeline.thinkingBuffer = thinkingBuffer
     appCtx.pipeline.revisionNotes = revisionNotes
     appCtx.pipeline.approvedNotes = approvedNotes
     appCtx.pipeline.onRetry = retryCurrentStep
@@ -320,6 +325,9 @@
               running = false
               clearStallTimer()
               scheduleSaveSession()
+            } else if (event.stage === 'thinking_token') {
+              thinkingNode = event.node
+              thinkingBuffer += event.token
             } else if (event.stage === 'writer_token') {
               if (firstDraftDone && revisionNotes.length > 0) {
                 revisionNotes = []
@@ -331,6 +339,8 @@
               event.stage === 'source_fetcher' ||
               event.stage === 'source_approval'
             ) {
+              thinkingNode = null
+              thinkingBuffer = ''
               stages = [...stages, { label: event.label, stageType: event.stage }]
               lastStageType = event.stage
               scheduleSaveSession()
@@ -347,6 +357,8 @@
               lastStageType = event.stage
               scheduleSaveSession()
             } else if (event.stage === 'outliner') {
+              thinkingNode = null
+              thinkingBuffer = ''
               stages = [
                 ...stages,
                 {
@@ -359,6 +371,8 @@
               lastStageType = event.stage
               scheduleSaveSession()
             } else if (event.stage === 'writer') {
+              thinkingNode = null
+              thinkingBuffer = ''
               if (writingDraft) currentDraft = writingDraft
               writingDraft = ''
               stages = [
@@ -857,7 +871,7 @@
               <p>Edit below, then continue to start writing.</p>
             </div>
             <div class="field">
-              <textarea bind:value={interruptedOutline} rows={18}></textarea>
+              <textarea bind:value={interruptedOutline} class="outline-textarea"></textarea>
             </div>
             <button class="action-btn" onclick={resumeWithOutline} disabled={running}>
               {#if running}<span class="spin"></span> Resuming…{:else}Continue with this outline{/if}
@@ -1405,6 +1419,10 @@
     font-weight: 500;
     color: rgba(255, 255, 255, 0.45);
     letter-spacing: 0.01em;
+  }
+  .outline-textarea {
+    field-sizing: content; /* auto-grow with content */
+    min-height: 12rem;
   }
   textarea {
     background: rgba(255, 255, 255, 0.04);

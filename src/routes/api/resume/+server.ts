@@ -254,7 +254,9 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
             const output = (event.data as { output?: Record<string, unknown> }).output ?? {}
             logger.info({ runId, stage: name }, 'stage complete')
             send(buildNodeEvent(name, output))
-          } else if (eventType === 'on_chat_model_stream' && meta?.langgraph_node === 'writer') {
+          } else if (eventType === 'on_chat_model_stream') {
+            const nodeName = meta?.langgraph_node as string | undefined
+            if (!nodeName || !NODE_NAMES.has(nodeName)) continue
             const chunk = (event.data as { chunk?: { content?: unknown } }).chunk
             const content = chunk?.content
             let token = ''
@@ -263,7 +265,12 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
             } else if (Array.isArray(content)) {
               token = (content as Array<{ text?: string }>).map(c => c.text ?? '').join('')
             }
-            if (token) send({ stage: 'writer_token', token })
+            if (!token) continue
+            if (nodeName === 'writer') {
+              send({ stage: 'writer_token', token })
+            } else {
+              send({ stage: 'thinking_token', node: nodeName, token })
+            }
           }
         }
 

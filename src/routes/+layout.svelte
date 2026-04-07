@@ -63,6 +63,8 @@
     writingDraft: '',
     revisionNotes: [] as string[],
     approvedNotes: new Set<number>(),
+    thinkingNode: '',
+    thinkingBuffer: '',
     onRetry: () => {},
     onPause: () => {},
     onResume: () => {}
@@ -500,6 +502,12 @@
                             {pipeline.writingDraft.split(/\s+/).slice(-10).join(' ')}
                           </p>
                         {/if}
+                        {#if pipeline.thinkingNode && pipeline.thinkingBuffer}
+                          <p class="pip-thinking-label">{pipeline.thinkingNode}</p>
+                          <p class="pip-stream pip-thinking">
+                            {pipeline.thinkingBuffer.slice(-200)}
+                          </p>
+                        {/if}
                       </div>
                     </div>
                   </li>
@@ -776,7 +784,7 @@
   /* ── Pipeline show button (fixed top-right corner) ─────────────────── */
   .pip-tab {
     position: fixed;
-    top: 64px; /* 52px header + 12px pipeline margin */
+    top: 76px; /* 52px header + 24px = matches draft's 1.5rem top padding */
     right: 0;
     z-index: 30;
     display: flex;
@@ -1049,12 +1057,12 @@
   /* Wide: sticky detached card — stays visible as main-column scrolls */
   .sidebar-pipeline {
     position: sticky;
-    top: 12px;
+    top: 24px;
     align-self: flex-start; /* natural height, not full column */
-    max-height: calc(100vh - 76px); /* cap so pipeline-body can scroll internally */
+    max-height: calc(100vh - 100px); /* cap so pipeline-body can scroll internally */
     width: 0;
     overflow: hidden;
-    margin: 12px 8px 12px 0;
+    margin: 24px 8px 24px 0;
     border-radius: 12px;
     transition: width 0.18s ease;
     flex-shrink: 0;
@@ -1195,6 +1203,18 @@
     transform: rotate(180deg);
   }
 
+  .pip-thinking-label {
+    font-size: 0.6rem;
+    color: #2d3f55;
+    margin: 5px 0 1px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    font-style: normal;
+  }
+  .pip-thinking {
+    color: #2d3f55;
+  }
   .pip-stream {
     font-size: 0.67rem;
     color: #334155;
