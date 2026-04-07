@@ -268,7 +268,7 @@
 
     <!-- ── Body ─────────────────────────────────────────────────────────── -->
     <div class="body">
-      <!-- Mobile backdrop for history -->
+      <!-- Mobile backdrop for history sidebar -->
       {#if historyOpen}
         <div
           class="sidebar-backdrop"
@@ -344,198 +344,227 @@
         </div>
       </aside>
 
-      <!-- ── Main content area ────────────────────────────────────────── -->
-      <div class="content-area">
-        {@render children()}
-      </div>
+      <!-- ── Main column: content + pipeline ──────────────────────────── -->
+      <div class="main-column">
+        <!-- Main content (first in DOM = left in flex-row, top in flex-col) -->
+        <div class="content-area">
+          {@render children()}
+        </div>
 
-      <!-- ── Right sidebar: Pipeline progress ────────────────────────── -->
-      {#if pipeline.active}
-        <!-- Tab toggle — always visible, outside the collapsible aside -->
-        <button
-          class="pip-tab"
-          class:pip-tab-live={pipeline.running}
-          onclick={() => {
-            pipelineOpen = !pipelineOpen
-            if (!pipelineOpen) userClosedPipeline = true
-          }}
-          title={pipelineOpen ? 'Hide pipeline' : 'Show pipeline progress'}
-          aria-label="Toggle pipeline panel"
-        >
-          {#if pipeline.running}
-            <span class="pip-live-dot"></span>
-          {/if}
-          <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor" style="flex-shrink:0">
-            <path
-              fill-rule="evenodd"
-              d="M2 3.75A.75.75 0 012.75 3h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 3.75zm0 4.5A.75.75 0 012.75 7.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 8.25zm0 4.5A.75.75 0 012.75 12h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 12.75zm0 4.5A.75.75 0 012.75 16.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 17.25z"
-              clip-rule="evenodd"
-            />
-          </svg>
-        </button>
-
-        <aside
-          class="sidebar sidebar-pipeline"
-          class:open={pipelineOpen}
-          aria-label="Pipeline progress"
-        >
-          <div class="sidebar-header">
-            <span>Pipeline</span>
-          </div>
-
-          <div class="pipeline-body">
-            <ol class="pipeline">
-              {#each pipeline.stages as stage, i}
-                <li
-                  class="pipeline-item"
-                  class:revision={stage.isRevision}
-                  class:has-extra={!!stage.extra}
-                  class:expanded={expandedPipelineIdx === i}
-                  class:done-item={stage.isDone}
-                >
-                  <button
-                    class="pip-row"
-                    onclick={() => stage.extra && togglePipelineStage(i)}
-                    disabled={!stage.extra}
-                    tabindex={stage.extra ? 0 : -1}
-                  >
-                    <span class="pip-dot" class:done={!stage.isDone} class:complete={stage.isDone}
-                    ></span>
-                    <div class="pip-content">
-                      <span class="pip-label">{stage.label}</span>
-                      {#if stage.detail}
-                        <span
-                          class="pip-detail"
-                          class:approved={stage.detail.startsWith('✓')}
-                          class:rejected={stage.detail.startsWith('✗')}>{stage.detail}</span
-                        >
-                      {/if}
-                    </div>
-                    {#if stage.extra}
-                      <span class="pip-chevron" class:rotated={expandedPipelineIdx === i}>
-                        <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
-                          <path
-                            fill-rule="evenodd"
-                            d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z"
-                            clip-rule="evenodd"
-                          />
-                        </svg>
-                      </span>
-                    {/if}
-                  </button>
-
-                  {#if stage.extra && expandedPipelineIdx === i}
-                    <div class="pip-panel">
-                      {#if stage.extra.type === 'list'}
-                        <ul class="pip-panel-list">
-                          {#each stage.extra.items as item}
-                            <li>{item}</li>
-                          {/each}
-                        </ul>
-                      {:else if stage.extra.type === 'sources'}
-                        <ul class="pip-panel-sources">
-                          {#each stage.extra.items as src}
-                            <li>
-                              <a href={src.url} target="_blank" rel="noopener noreferrer">
-                                {src.title || src.url}
-                              </a>
-                            </li>
-                          {/each}
-                        </ul>
-                      {:else if stage.extra.type === 'markdown'}
-                        <pre class="pip-panel-md">{stage.extra.content.slice(0, 500)}{stage.extra
-                            .content.length > 500
-                            ? '\n…'
-                            : ''}</pre>
-                      {:else if stage.extra.type === 'seo'}
-                        <div class="pip-panel-seo">
-                          {#if stage.extra.meta?.titles?.[0]}
-                            <p class="pip-seo-val">{stage.extra.meta.titles[0]}</p>
-                          {/if}
-                          {#if stage.extra.meta?.slug}
-                            <code class="pip-seo-slug">{stage.extra.meta.slug}</code>
-                          {/if}
-                        </div>
-                      {/if}
-                    </div>
-                  {/if}
-                </li>
-              {/each}
-
+        <!-- Pipeline: right sidebar on wide, inline strip on narrow -->
+        {#if pipeline.active}
+          <!-- Show button: fixed top-right corner, only when panel is closed -->
+          {#if !pipelineOpen}
+            <button
+              class="pip-tab"
+              class:pip-tab-live={pipeline.running}
+              onclick={() => (pipelineOpen = true)}
+              title="Show pipeline progress"
+              aria-label="Show pipeline panel"
+            >
               {#if pipeline.running}
-                <li class="pipeline-item working">
-                  <div class="pip-row pip-row-static">
-                    <span class="pip-dot spinning"></span>
-                    <div class="pip-content">
-                      <span class="pip-label">
-                        {pipeline.firstDraftDone ? 'Revising draft…' : 'Working…'}
-                      </span>
-                      {#if pipeline.writingDraft && pipeline.firstDraftDone}
-                        <p class="pip-stream">
-                          {pipeline.writingDraft.split(/\s+/).slice(-10).join(' ')}
-                        </p>
-                      {/if}
-                    </div>
-                  </div>
-                </li>
+                <span class="pip-live-dot"></span>
               {/if}
-            </ol>
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                style="flex-shrink:0"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M2 3.75A.75.75 0 012.75 3h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 3.75zm0 4.5A.75.75 0 012.75 7.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 8.25zm0 4.5A.75.75 0 012.75 12h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 12.75zm0 4.5A.75.75 0 012.75 16.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 17.25z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </button>
+          {/if}
 
-            {#if pipeline.running && pipeline.stalled}
-              <div class="pip-stall">
-                <span>Taking longer than expected…</span>
-                <button class="pip-retry-btn" onclick={pipeline.onRetry}>
-                  <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fill-rule="evenodd"
-                      d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
-                      clip-rule="evenodd"
-                    />
-                  </svg>
-                  Retry
-                </button>
-              </div>
-            {/if}
-
-            {#if pipeline.running && !pipeline.stalled}
-              <button class="pip-pause-btn" onclick={pipeline.onPause}>
-                <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
-                  <rect x="4" y="3" width="4" height="14" rx="1" />
-                  <rect x="12" y="3" width="4" height="14" rx="1" />
+          <aside
+            class="sidebar sidebar-pipeline"
+            class:open={pipelineOpen}
+            aria-label="Pipeline progress"
+          >
+            <div class="sidebar-header">
+              <span>Pipeline</span>
+              <!-- Hide button: arrow inside the panel, right next to the title -->
+              <button
+                class="pip-collapse-btn"
+                onclick={() => {
+                  pipelineOpen = !pipelineOpen
+                  if (!pipelineOpen) userClosedPipeline = true
+                }}
+                title={pipelineOpen ? 'Hide pipeline' : 'Show pipeline'}
+                aria-label="Toggle pipeline panel"
+              >
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fill-rule="evenodd"
+                    d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
-                Pause generation
               </button>
-            {/if}
+            </div>
 
-            {#if pipeline.paused && pipeline.runId}
-              <div class="pip-paused" class:all-approved={allPipelineNotesApproved}>
-                {#if allPipelineNotesApproved}
-                  <span>All notes approved — resuming to final edit.</span>
-                {:else if pipeline.approvedNotes.size > 0}
-                  <span>
-                    {pipeline.approvedNotes.size}
-                    {pipeline.approvedNotes.size !== 1 ? 'notes' : 'note'} approved.
-                  </span>
-                {:else if pipeline.revisionNotes.length > 0}
-                  <span>Paused. Review the highlighted text in the draft.</span>
-                {:else}
-                  <span>Generation paused.</span>
+            <div class="pipeline-body">
+              <ol class="pipeline">
+                {#each pipeline.stages as stage, i}
+                  <li
+                    class="pipeline-item"
+                    class:revision={stage.isRevision}
+                    class:has-extra={!!stage.extra}
+                    class:expanded={expandedPipelineIdx === i}
+                    class:done-item={stage.isDone}
+                  >
+                    <button
+                      class="pip-row"
+                      onclick={() => stage.extra && togglePipelineStage(i)}
+                      disabled={!stage.extra}
+                      tabindex={stage.extra ? 0 : -1}
+                    >
+                      <span class="pip-dot" class:done={!stage.isDone} class:complete={stage.isDone}
+                      ></span>
+                      <div class="pip-content">
+                        <span class="pip-label">{stage.label}</span>
+                        {#if stage.detail}
+                          <span
+                            class="pip-detail"
+                            class:approved={stage.detail.startsWith('✓')}
+                            class:rejected={stage.detail.startsWith('✗')}>{stage.detail}</span
+                          >
+                        {/if}
+                      </div>
+                      {#if stage.extra}
+                        <span class="pip-chevron" class:rotated={expandedPipelineIdx === i}>
+                          <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
+                            <path
+                              fill-rule="evenodd"
+                              d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z"
+                              clip-rule="evenodd"
+                            />
+                          </svg>
+                        </span>
+                      {/if}
+                    </button>
+
+                    {#if stage.extra && expandedPipelineIdx === i}
+                      <div class="pip-panel">
+                        {#if stage.extra.type === 'list'}
+                          <ul class="pip-panel-list">
+                            {#each stage.extra.items as item}
+                              <li>{item}</li>
+                            {/each}
+                          </ul>
+                        {:else if stage.extra.type === 'sources'}
+                          <ul class="pip-panel-sources">
+                            {#each stage.extra.items as src}
+                              <li>
+                                <a href={src.url} target="_blank" rel="noopener noreferrer">
+                                  {src.title || src.url}
+                                </a>
+                              </li>
+                            {/each}
+                          </ul>
+                        {:else if stage.extra.type === 'markdown'}
+                          <pre class="pip-panel-md">{stage.extra.content.slice(0, 500)}{stage.extra
+                              .content.length > 500
+                              ? '\n…'
+                              : ''}</pre>
+                        {:else if stage.extra.type === 'seo'}
+                          <div class="pip-panel-seo">
+                            {#if stage.extra.meta?.titles?.[0]}
+                              <p class="pip-seo-val">{stage.extra.meta.titles[0]}</p>
+                            {/if}
+                            {#if stage.extra.meta?.slug}
+                              <code class="pip-seo-slug">{stage.extra.meta.slug}</code>
+                            {/if}
+                          </div>
+                        {/if}
+                      </div>
+                    {/if}
+                  </li>
+                {/each}
+
+                {#if pipeline.running}
+                  <li class="pipeline-item working">
+                    <div class="pip-row pip-row-static">
+                      <span class="pip-dot spinning"></span>
+                      <div class="pip-content">
+                        <span class="pip-label">
+                          {pipeline.firstDraftDone ? 'Revising draft…' : 'Working…'}
+                        </span>
+                        {#if pipeline.writingDraft && pipeline.firstDraftDone}
+                          <p class="pip-stream">
+                            {pipeline.writingDraft.split(/\s+/).slice(-10).join(' ')}
+                          </p>
+                        {/if}
+                      </div>
+                    </div>
+                  </li>
                 {/if}
-                <button class="pip-resume-btn" onclick={pipeline.onResume}>
+              </ol>
+
+              {#if pipeline.running && pipeline.stalled}
+                <div class="pip-stall">
+                  <span>Taking longer than expected…</span>
+                  <button class="pip-retry-btn" onclick={pipeline.onRetry}>
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                      <path
+                        fill-rule="evenodd"
+                        d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                    Retry
+                  </button>
+                </div>
+              {/if}
+
+              {#if pipeline.running && !pipeline.stalled}
+                <button class="pip-pause-btn" onclick={pipeline.onPause}>
                   <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
-                    />
+                    <rect x="4" y="3" width="4" height="14" rx="1" />
+                    <rect x="12" y="3" width="4" height="14" rx="1" />
                   </svg>
-                  Resume
+                  Pause generation
                 </button>
-              </div>
-            {/if}
-          </div>
-        </aside>
-      {/if}
+              {/if}
+
+              {#if pipeline.paused && pipeline.runId}
+                <div class="pip-paused" class:all-approved={allPipelineNotesApproved}>
+                  {#if allPipelineNotesApproved}
+                    <span>All notes approved — resuming to final edit.</span>
+                  {:else if pipeline.approvedNotes.size > 0}
+                    <span>
+                      {pipeline.approvedNotes.size}
+                      {pipeline.approvedNotes.size !== 1 ? 'notes' : 'note'} approved.
+                    </span>
+                  {:else if pipeline.revisionNotes.length > 0}
+                    <span>Paused. Review the highlighted text in the draft.</span>
+                  {:else}
+                    <span>Generation paused.</span>
+                  {/if}
+                  <button class="pip-resume-btn" onclick={pipeline.onResume}>
+                    <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
+                      <path
+                        d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
+                      />
+                    </svg>
+                    Resume
+                  </button>
+                </div>
+              {/if}
+            </div>
+          </aside>
+        {/if}
+      </div>
+      <!-- /.main-column -->
     </div>
+    <!-- /.body -->
   </div>
+  <!-- /.app -->
 
   <!-- ── History delete dialog ──────────────────────────────────────────── -->
   <Dialog.Root
@@ -572,12 +601,12 @@
 <style>
   :global(body) {
     margin: 0;
-    overflow-x: hidden;
+    overflow: hidden; /* app scrolls internally via .main-column */
   }
 
   /* ── App shell ─────────────────────────────────────────────────────── */
   .app {
-    min-height: 100vh;
+    height: 100vh; /* lock to viewport — prevents document scroll */
     background: #080c14;
     font-family: 'Inter', ui-sans-serif, sans-serif;
     display: flex;
@@ -744,27 +773,47 @@
     line-height: 1;
   }
 
-  /* ── Pipeline sidebar edge tab ─────────────────────────────────────── */
+  /* ── Pipeline show button (fixed top-right corner) ─────────────────── */
   .pip-tab {
-    width: 28px;
-    min-width: 28px;
-    flex-shrink: 0;
-    align-self: stretch;
+    position: fixed;
+    top: 52px;
+    right: 0;
+    z-index: 30;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 5px;
-    padding: 0.55rem 0;
-    background: rgba(15, 21, 35, 0.92);
-    border: none;
-    border-left: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 0.6rem 0.4rem;
+    width: 28px;
+    background: rgba(15, 21, 35, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: none;
+    border-radius: 6px 0 0 6px;
     color: #475569;
     cursor: pointer;
+    backdrop-filter: blur(8px);
   }
   .pip-tab:hover {
     color: #94a3b8;
-    background: rgba(20, 28, 46, 0.96);
+    background: rgba(20, 28, 46, 0.98);
+  }
+
+  /* ── Pipeline collapse button (inside sidebar header) ───────────────── */
+  .pip-collapse-btn {
+    background: transparent;
+    border: none;
+    color: #334155;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s;
+    flex-shrink: 0;
+  }
+  .pip-collapse-btn:hover {
+    color: #94a3b8;
   }
   .pip-tab-live {
     color: #818cf8;
@@ -974,11 +1023,22 @@
     color: #ef4444;
   }
 
+  /* ── Main column (content + pipeline) ─────────────────────────────── */
+  .main-column {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto; /* this is now the scroll container */
+    align-items: flex-start; /* children take natural height so they can overflow */
+  }
+
   /* ── Content area ──────────────────────────────────────────────────── */
   .content-area {
     flex: 1;
     min-width: 0;
-    overflow-y: auto;
+    min-height: 100%; /* at least full column height even on short pages */
     position: relative;
     z-index: 1;
     display: flex;
@@ -986,16 +1046,25 @@
   }
 
   /* ── Right sidebar: Pipeline ───────────────────────────────────────── */
+  /* Wide: sticky detached card — stays visible as main-column scrolls */
   .sidebar-pipeline {
+    position: sticky;
+    top: 12px;
+    align-self: flex-start; /* natural height, not full column */
+    max-height: calc(100vh - 76px); /* cap so pipeline-body can scroll internally */
     width: 0;
-    min-width: 0;
-    border-left: 1px solid rgba(255, 255, 255, 0.05);
     overflow: hidden;
-    position: relative;
+    margin: 12px 8px 12px 0;
+    border-radius: 12px;
+    transition: width 0.18s ease;
+    flex-shrink: 0;
   }
   .sidebar-pipeline.open {
     width: 284px;
-    min-width: 284px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 4px 32px rgba(0, 0, 0, 0.45),
+      0 1px 6px rgba(0, 0, 0, 0.25);
   }
 
   .pipeline-body {
@@ -1307,7 +1376,7 @@
     background: rgba(99, 102, 241, 0.28);
   }
 
-  /* Sidebar backdrops (mobile) */
+  /* Sidebar backdrop (mobile history) */
   .sidebar-backdrop {
     position: fixed;
     inset: 0;
@@ -1441,6 +1510,66 @@
   }
 
   /* ── Responsive ────────────────────────────────────────────────────── */
+
+  /* Narrow: pipeline is an inline collapsible strip above the draft */
+  @media (max-width: 1023px) {
+    .main-column {
+      flex-direction: column;
+      align-items: stretch;
+      overflow-y: auto;
+    }
+
+    /* Hide the fixed show-button — the header arrow handles toggle on narrow */
+    .pip-tab {
+      display: none;
+    }
+
+    /* Sidebar stacks above content; collapses to just the header row */
+    .sidebar-pipeline {
+      order: -1;
+      position: static; /* no sticky */
+      width: 100%;
+      /* Collapse = max-height of just the header (~2.5rem) */
+      max-height: 2.5rem;
+      overflow: hidden;
+      margin: 0;
+      border-radius: 0;
+      align-self: auto;
+      flex-shrink: 0;
+      transition: max-height 0.22s ease;
+      border: none;
+      box-shadow: none;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .sidebar-pipeline.open {
+      max-height: 45vh;
+      width: 100%;
+      border-radius: 0;
+      box-shadow: none;
+      border: none;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    /* Restore pipeline-body scroll when open */
+    .sidebar-pipeline.open .pipeline-body {
+      overflow-y: auto;
+    }
+
+    /* Chevron: points down when collapsed, up when expanded */
+    .pip-collapse-btn svg {
+      transform: rotate(90deg);
+      transition: transform 0.2s;
+    }
+    .sidebar-pipeline.open .pip-collapse-btn svg {
+      transform: rotate(-90deg);
+    }
+
+    .content-area {
+      order: 0;
+      min-height: auto;
+    }
+  }
+
   @media (max-width: 768px) {
     .mobile-toggle {
       display: flex;
@@ -1464,22 +1593,6 @@
     }
     .sidebar-history.open {
       transform: translateX(0);
-    }
-
-    .sidebar-pipeline {
-      position: fixed;
-      top: 52px;
-      bottom: 0;
-      right: 0;
-      z-index: 40;
-      width: 284px !important;
-      min-width: 284px !important;
-      transform: translateX(100%);
-      overflow: hidden;
-    }
-    .sidebar-pipeline.open {
-      transform: translateX(0);
-      overflow: visible;
     }
   }
 
