@@ -776,7 +776,7 @@
   /* ── Pipeline show button (fixed top-right corner) ─────────────────── */
   .pip-tab {
     position: fixed;
-    top: 52px;
+    top: 64px; /* 52px header + 12px pipeline margin */
     right: 0;
     z-index: 30;
     display: flex;
