@@ -22,7 +22,6 @@
   const { data } = $props<{ data: { post: SavedPost } }>()
   const { refreshHistory } = getContext<{ refreshHistory: () => void }>('app')
 
-  let rawMode = $state(false)
   let showDeleteDialog = $state(false)
 
   function renderMd(text: string): string {
@@ -63,12 +62,6 @@
         </div>
       </div>
       <div class="post-actions">
-        <button class="md-toggle" class:active={!rawMode} onclick={() => (rawMode = false)}
-          >Preview</button
-        >
-        <button class="md-toggle" class:active={rawMode} onclick={() => (rawMode = true)}
-          >Markdown</button
-        >
         <button class="copy-btn" onclick={() => copyToClipboard(data.post.post)}>
           <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
             ><path
@@ -94,11 +87,7 @@
 
     <!-- Body -->
     <div class="post-body">
-      {#if rawMode}
-        <pre class="post-raw">{data.post.post}</pre>
-      {:else}
-        <div class="post-content prose">{@html renderMd(data.post.post)}</div>
-      {/if}
+      <div class="post-content prose">{@html renderMd(data.post.post)}</div>
     </div>
 
     <!-- Footer: word count -->
@@ -299,31 +288,6 @@
     flex-wrap: wrap;
   }
 
-  .md-toggle {
-    background: none;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
-    color: rgba(255, 255, 255, 0.35);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.72rem;
-    font-weight: 500;
-    padding: 0.25rem 0.6rem;
-    cursor: pointer;
-    transition:
-      color 0.15s,
-      border-color 0.15s,
-      background 0.15s;
-  }
-  .md-toggle:hover {
-    color: rgba(255, 255, 255, 0.7);
-    border-color: rgba(255, 255, 255, 0.15);
-  }
-  .md-toggle.active {
-    color: #a5b4fc;
-    border-color: rgba(129, 140, 248, 0.35);
-    background: rgba(99, 102, 241, 0.08);
-  }
-
   .copy-btn {
     display: flex;
     align-items: center;
@@ -375,15 +339,6 @@
   .post-body {
     padding: 1.5rem;
   }
-  .post-raw {
-    font-family: 'Lora', Georgia, serif;
-    font-size: 0.925rem;
-    line-height: 1.8;
-    color: rgba(255, 255, 255, 0.7);
-    white-space: pre-wrap;
-    margin: 0;
-  }
-
   /* ── Prose ───────────────────────────────────────── */
   .prose {
     font-family: 'Lora', Georgia, serif;

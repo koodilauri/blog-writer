@@ -3,6 +3,7 @@ import type { Source } from './agents/types.js'
 export type InterruptData =
   | { type: 'outline'; content: string }
   | { type: 'sources'; sources: Source[]; scores: number[] }
+  | { type: 'fact_checker'; notes: string[] }
 
 type SnapshotLike = {
   tasks: { interrupts?: { value?: unknown }[] }[]
@@ -21,6 +22,9 @@ export function extractInterrupt(snapshot: SnapshotLike): InterruptData | undefi
       if (typeof v === 'object' && v !== null && 'sources' in v) {
         const s = v as { sources: Source[]; scores: number[] }
         return { type: 'sources', sources: s.sources, scores: s.scores }
+      }
+      if (typeof v === 'object' && v !== null && 'notes' in v) {
+        return { type: 'fact_checker', notes: (v as { notes: string[] }).notes }
       }
     }
   }

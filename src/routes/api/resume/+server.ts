@@ -22,7 +22,8 @@ const ResumeBodySchema = z.object({
   outline: z.string().optional(),
   sources: z.array(SourceSchema).optional(),
   addUrls: z.array(z.string().url()).optional(),
-  approvedNotes: z.array(z.string()).optional()
+  approvedNotes: z.array(z.string()).optional(),
+  factCheckerApproval: z.array(z.string()).optional()
 })
 
 const STAGE_LABELS: Record<string, string> = {
@@ -148,14 +149,15 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
     )
   }
 
-  const { runId, outline, sources, addUrls, approvedNotes } = parsed.data
+  const { runId, outline, sources, addUrls, approvedNotes, factCheckerApproval } = parsed.data
   logger.info(
     {
       runId,
       hasOutline: !!outline,
       hasSources: !!sources,
       addUrlCount: addUrls?.length ?? 0,
-      approvedNoteCount: approvedNotes?.length ?? 0
+      approvedNoteCount: approvedNotes?.length ?? 0,
+      factCheckerApprovalCount: factCheckerApproval?.length ?? 0
     },
     'resume request'
   )
@@ -183,7 +185,9 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
 
   // Determine input based on what was provided
   let input: Command | null
-  if (outline !== undefined) {
+  if (factCheckerApproval !== undefined) {
+    input = new Command({ resume: factCheckerApproval })
+  } else if (outline !== undefined) {
     input = new Command({ resume: outline })
   } else if (sources !== undefined) {
     // Fetch content for any user-added URLs, then merge with approved sources
@@ -201,37 +205,6 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
     input = new Command({ resume: finalSources })
   } else {
     input = null // crash recovery or pause-resume
-  }
-
-  // If approved notes were submitted, update graph state before resuming
-  if (approvedNotes && approvedNotes.length > 0) {
-    try {
-      const snapshot = await graph.getState(config)
-      const currentNotes: string[] =
-        (snapshot.values.factCheckerNotes as string[] | undefined) ?? []
-      const currentApproved: string[] =
-        (snapshot.values.approvedNotes as string[] | undefined) ?? []
-      const newApproved = [...new Set([...currentApproved, ...approvedNotes])]
-      const remaining = currentNotes.filter(n => !approvedNotes.includes(n))
-      await graph.updateState(config, {
-        factCheckerNotes: remaining,
-        approvedNotes: newApproved,
-        approved: remaining.length === 0
-      })
-      logger.info(
-        {
-          runId,
-          remaining: remaining.length,
-          approved: remaining.length === 0
-        },
-        'applied approved notes to state'
-      )
-    } catch (err) {
-      logger.warn(
-        { runId, error: err instanceof Error ? err.message : String(err) },
-        'failed to apply approved notes'
-      )
-    }
   }
 
   const stream = new ReadableStream({
@@ -293,6 +266,14 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
             type: 'sources',
             sources: intr.sources,
             scores: intr.scores,
+            runId
+          })
+        } else if (intr?.type === 'fact_checker') {
+          logger.info({ runId }, 'graph interrupted at fact-checker approval (resume)')
+          send({
+            stage: 'interrupt',
+            type: 'fact_checker',
+            notes: intr.notes,
             runId
           })
         } else {

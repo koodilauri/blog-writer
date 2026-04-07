@@ -45,15 +45,12 @@ Your job is to:
 4. Improve flow and readability without changing meaning or facts
 5. Ensure the post has a clear introduction and conclusion
 
-Return the complete edited post first, then list your changes.
-
-Use this exact format:
-<post>
-[the full edited post here]
-</post>
-<notes>
-- brief description of each change (one per line), or "No changes needed"
-</notes>`
+Output rules — follow these exactly:
+- Return ONLY the finished post followed by your notes. No preamble, no meta-commentary.
+- Do NOT wrap anything in XML tags like <post>, <draft>, <notes>, or any other tags.
+- Do NOT include the word "Notes:" or similar headings in the post body.
+- The post must be clean, publication-ready markdown with no leftover formatting artifacts.
+- After the post, add a line containing only "---" followed by a brief bullet list of changes (or "No changes needed").`
 }
 
 export async function editorNode(state: GraphStateType): Promise<Partial<GraphStateType>> {
@@ -69,29 +66,31 @@ export async function editorNode(state: GraphStateType): Promise<Partial<GraphSt
   const content =
     typeof response.content === 'string' ? response.content : JSON.stringify(response.content)
 
-  const notesMatch = content.match(/<notes>([\s\S]*?)<\/notes>/)
-  const postMatch = content.match(/<post>([\s\S]*?)<\/post>/)
+  // Strip any leftover XML tags the model may still emit despite instructions
+  const stripped = content
+    .replace(/<\/?post>/gi, '')
+    .replace(/<\/?draft>/gi, '')
+    .replace(/<\/?notes>/gi, '')
+    .trim()
 
-  if (!postMatch) {
-    // Small models often prepend a "### Notes / - bullet" block before the actual post.
-    // Detect and strip any leading notes/changes/edits section, then use the remainder.
-    const withoutLeadingNotes = content
-      .replace(/^#{1,4}\s*(?:notes?|changes?|edits?)[^\n]*\n(?:[-•*]\s+[^\n]+\n?)*\n*/i, '')
-      .trim()
-    return {
-      finalPost: withoutLeadingNotes || content.trim(),
-      editorNotes: []
-    }
+  // Split on the separator line ("---") to separate post from editor notes
+  const sepIdx = stripped.search(/\n---\n/)
+  let finalPost: string
+  let rawNotes: string
+
+  if (sepIdx !== -1) {
+    finalPost = stripped.slice(0, sepIdx).trim()
+    rawNotes = stripped.slice(sepIdx + 5).trim()
+  } else {
+    // No separator — use the whole content as the post
+    finalPost = stripped
+    rawNotes = ''
   }
 
-  const rawNotes = notesMatch ? notesMatch[1].trim() : ''
   const editorNotes = rawNotes
     .split('\n')
     .map(line => line.replace(/^[-•*]\s*/, '').trim())
     .filter(line => line.length > 0 && line !== 'No changes needed')
 
-  return {
-    finalPost: postMatch[1].trim(),
-    editorNotes
-  }
+  return { finalPost, editorNotes }
 }

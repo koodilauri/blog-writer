@@ -231,6 +231,14 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
             scores: intr.scores,
             runId
           })
+        } else if (intr?.type === 'fact_checker') {
+          logger.info({ runId }, 'graph interrupted at fact-checker approval')
+          send({
+            stage: 'interrupt',
+            type: 'fact_checker',
+            notes: intr.notes,
+            runId
+          })
         } else {
           logger.info({ runId }, 'generate complete')
           send({

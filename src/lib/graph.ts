@@ -7,11 +7,16 @@ import { sourceApprovalNode } from './agents/source-approval.js'
 import { outlinerNode } from './agents/outliner.js'
 import { writerNode } from './agents/writer.js'
 import { factCheckerNode } from './agents/fact-checker.js'
+import { factCheckerApprovalNode } from './agents/fact-checker-approval.js'
 import { editorNode } from './agents/editor.js'
 import { seoNode } from './agents/seo.js'
 import type { BaseCheckpointSaver } from '@langchain/langgraph'
 
 const MAX_REVISIONS = 3
+
+function routeAfterFactCheck(state: GraphStateType): 'fact_checker_approval' | 'editor' {
+  return state.approved ? 'editor' : 'fact_checker_approval'
+}
 
 function shouldRevise(state: GraphStateType): 'writer' | 'editor' {
   if (!state.approved && state.revisionCount < MAX_REVISIONS) {
@@ -38,6 +43,7 @@ export function buildGraph(checkpointer?: BaseCheckpointSaver) {
     .addNode('outliner', outlinerNode)
     .addNode('writer', writerNode)
     .addNode('fact_checker', factCheckerNode)
+    .addNode('fact_checker_approval', factCheckerApprovalNode)
     .addNode('editor', editorNode)
     .addNode('seo', seoNode)
     .addEdge(START, 'query_generator')
@@ -50,7 +56,11 @@ export function buildGraph(checkpointer?: BaseCheckpointSaver) {
     .addEdge('source_approval', 'outliner')
     .addEdge('outliner', 'writer')
     .addEdge('writer', 'fact_checker')
-    .addConditionalEdges('fact_checker', shouldRevise, {
+    .addConditionalEdges('fact_checker', routeAfterFactCheck, {
+      fact_checker_approval: 'fact_checker_approval',
+      editor: 'editor'
+    })
+    .addConditionalEdges('fact_checker_approval', shouldRevise, {
       writer: 'writer',
       editor: 'editor'
     })

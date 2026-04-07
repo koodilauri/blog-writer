@@ -46,6 +46,7 @@
     | { stage: 'done'; runId: string; post: string; sources: Source[]; seoMeta?: SeoMeta }
     | { stage: 'interrupt'; type: 'outline'; content: string; runId: string }
     | { stage: 'interrupt'; type: 'sources'; sources: Source[]; scores: number[]; runId: string }
+    | { stage: 'interrupt'; type: 'fact_checker'; notes: string[]; runId: string }
     | { stage: 'error'; error: string }
 
   const postId = $derived(page.params.id)
@@ -82,16 +83,24 @@
   let firstDraftDone = $state(false)
   let thinkingNode = $state<string | null>(null)
   let thinkingBuffer = $state('')
+  let writingOutline = $state('')
   let showResumePrompt = $state(false)
   let savedSession = $state<Record<string, unknown> | null>(null)
   let lastStageType = $state('')
   let revTooltip = $state<{ note: string; noteIndex: number; x: number; y: number } | null>(null)
   let paused = $state(false)
   let approvedNotes = $state(new Set<number>())
-
-  let draftRawMode = $state(false)
+  let factCheckerInterrupted = $state(false)
+  let interruptedFactNotes = $state<string[]>([])
+  let approvedFactNotes = $state(new Set<string>())
 
   let notFound = $state(false)
+
+  // Reset notFound if the URL changes to a different draft (component reuse across navigations)
+  $effect(() => {
+    void postId
+    notFound = false
+  })
 
   // ── Layout context ───────────────────────────────────────────────
   type PipelineCtx = {
@@ -182,8 +191,9 @@
       }
     }
 
-    // Nothing found — draft not available
+    // Nothing found — draft not available; clear any stale session so generate page doesn't loop
     notFound = true
+    clearSession()
   })
 
   async function startGeneration() {
@@ -219,11 +229,15 @@
     sources?: Source[]
     addUrls?: string[]
     approvedNotes?: string[]
+    factCheckerApproval?: string[]
   }) {
     running = true
     paused = false
     interrupted = false
     sourcesInterrupted = false
+    factCheckerInterrupted = false
+    interruptedFactNotes = []
+    approvedFactNotes = new Set()
     errorMsg = ''
     canResume = false
     writingDraft = ''
@@ -292,6 +306,13 @@
               running = false
               clearStallTimer()
               scheduleSaveSession()
+            } else if (event.stage === 'interrupt' && event.type === 'fact_checker') {
+              factCheckerInterrupted = true
+              interruptedFactNotes = event.notes
+              approvedFactNotes = new Set()
+              running = false
+              clearStallTimer()
+              scheduleSaveSession()
             } else if (event.stage === 'done') {
               currentDraft = event.post
               finalPost = event.post
@@ -328,6 +349,7 @@
             } else if (event.stage === 'thinking_token') {
               thinkingNode = event.node
               thinkingBuffer += event.token
+              if (event.node === 'outliner') writingOutline += event.token
             } else if (event.stage === 'writer_token') {
               if (firstDraftDone && revisionNotes.length > 0) {
                 revisionNotes = []
@@ -359,6 +381,7 @@
             } else if (event.stage === 'outliner') {
               thinkingNode = null
               thinkingBuffer = ''
+              writingOutline = ''
               stages = [
                 ...stages,
                 {
@@ -470,6 +493,11 @@
     await streamResume({ runId, sources: approved, addUrls: urls })
   }
 
+  async function approveFactCheckerNotes(approvedSet: Set<string>) {
+    factCheckerInterrupted = false
+    await streamResume({ runId, factCheckerApproval: [...approvedSet] })
+  }
+
   function goBack() {
     if (running) {
       if (!window.confirm('Generation is still running. Leave anyway?')) return
@@ -537,7 +565,9 @@
         interruptedOutline,
         sourcesInterrupted,
         interruptedSources,
-        interruptedScores
+        interruptedScores,
+        factCheckerInterrupted,
+        interruptedFactNotes
       }
       await fetch('/api/session', {
         method: 'PUT',
@@ -570,8 +600,11 @@
     interruptedScores = s.interruptedScores ?? []
     if (interruptedSources.length > 0)
       checkedSources = new Set(interruptedSources.map((x: Source) => x.url))
+    factCheckerInterrupted = s.factCheckerInterrupted ?? false
+    interruptedFactNotes = s.interruptedFactNotes ?? []
+    approvedFactNotes = new Set()
     savedSession = null
-    if (!interrupted && !sourcesInterrupted && runId) {
+    if (!interrupted && !sourcesInterrupted && !factCheckerInterrupted && runId) {
       await streamResume({ runId })
     }
   }
@@ -675,20 +708,30 @@
     if (pos < text.length) out += escHtml(text.slice(pos))
     return out
   }
+  const approvedFactNoteIndices = $derived(
+    new Set(
+      interruptedFactNotes.map((n, i) => (approvedFactNotes.has(n) ? i : -1)).filter(i => i !== -1)
+    )
+  )
   const draftHtml = $derived(
     !firstDraftDone && writingDraft
       ? escHtml(writingDraft)
       : currentDraft
-        ? revisionNotes.length > 0
+        ? factCheckerInterrupted
           ? renderHighlighted(
               currentDraft,
-              findRevisionRanges(currentDraft, revisionNotes, approvedNotes)
+              findRevisionRanges(currentDraft, interruptedFactNotes, approvedFactNoteIndices)
             )
-          : escHtml(currentDraft)
+          : revisionNotes.length > 0
+            ? renderHighlighted(
+                currentDraft,
+                findRevisionRanges(currentDraft, revisionNotes, approvedNotes)
+              )
+            : escHtml(currentDraft)
         : ''
   )
   const hasLeftContent = $derived(
-    sourcesInterrupted || interrupted || !!(currentDraft || writingDraft)
+    sourcesInterrupted || interrupted || factCheckerInterrupted || !!(currentDraft || writingDraft)
   )
 
   // Sources visible during generation (from scorer stage), falls back to final sources
@@ -730,7 +773,8 @@
       return
     }
     const ni = parseInt(mark.dataset.note ?? '', 10)
-    if (isNaN(ni) || !revisionNotes[ni]) {
+    const activeNotes = factCheckerInterrupted ? interruptedFactNotes : revisionNotes
+    if (isNaN(ni) || !activeNotes[ni]) {
       revTooltip = null
       return
     }
@@ -740,7 +784,7 @@
     }
     const rect = mark.getBoundingClientRect()
     revTooltip = {
-      note: revisionNotes[ni],
+      note: activeNotes[ni],
       noteIndex: ni,
       x: rect.left + rect.width / 2,
       y: rect.top
@@ -795,9 +839,9 @@
       </div>
     {/if}
 
-    {#if stages.length > 0 || running || currentDraft || sourcesInterrupted || interrupted}
+    {#if stages.length > 0 || running || currentDraft || sourcesInterrupted || interrupted || factCheckerInterrupted}
       <div>
-        {#if running && !currentDraft && !writingDraft && !sourcesInterrupted && !interrupted}
+        {#if running && !currentDraft && !writingDraft && !sourcesInterrupted && !interrupted && !factCheckerInterrupted}
           <!-- Waiting view: show sources as they come in -->
           <section class="card waiting-card">
             <div class="waiting-header">
@@ -816,6 +860,12 @@
                     </li>
                   {/each}
                 </ul>
+              </div>
+            {/if}
+            {#if writingOutline}
+              <div class="waiting-outline">
+                <p class="waiting-sources-label">Generating outline…</p>
+                <pre class="waiting-outline-text">{writingOutline}</pre>
               </div>
             {/if}
           </section>
@@ -883,34 +933,6 @@
               <h2>{finalPost ? 'Generated Post' : 'Draft'}</h2>
               {#if finalPost}
                 <div class="result-actions">
-                  <button
-                    class="md-toggle"
-                    class:active={!draftRawMode}
-                    onclick={() => (draftRawMode = false)}
-                    title="Rendered"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
-                      ><path
-                        d="M2 4a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1zm0 5a1 1 0 011-1h10a1 1 0 110 2H3a1 1 0 01-1-1zm0 5a1 1 0 011-1h6a1 1 0 110 2H3a1 1 0 01-1-1z"
-                      /></svg
-                    >
-                    Preview
-                  </button>
-                  <button
-                    class="md-toggle"
-                    class:active={draftRawMode}
-                    onclick={() => (draftRawMode = true)}
-                    title="Raw markdown"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
-                      ><path
-                        fill-rule="evenodd"
-                        d="M2 5a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1a1 1 0 11-2 0 1 1 0 012 0zM2 13a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zm14 1a1 1 0 11-2 0 1 1 0 012 0z"
-                        clip-rule="evenodd"
-                      /></svg
-                    >
-                    Markdown
-                  </button>
                   {#if sources.length > 0}
                     <details class="sources-detail">
                       <summary>{sources.length} source{sources.length !== 1 ? 's' : ''}</summary>
@@ -952,19 +974,34 @@
               {/if}
             </div>
             {#if draftHtml}
-              {#if finalPost && !draftRawMode}
-                <div class="draft-body prose">{@html renderMd(finalPost)}</div>
+              {#if finalPost}
+                <pre class="draft-body draft-raw">{finalPost}</pre>
               {:else}
                 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                 <div class="draft-body" onclick={onDraftClick}>{@html draftHtml}</div>
               {/if}
               {#if revTooltip}
+                {@const tooltipApproved = factCheckerInterrupted
+                  ? approvedFactNotes.has(interruptedFactNotes[revTooltip.noteIndex])
+                  : approvedNotes.has(revTooltip.noteIndex)}
                 <div class="rev-tooltip" style="left:{revTooltip.x}px;top:{revTooltip.y}px">
                   <p class="rev-tooltip-note">{revTooltip.note}</p>
-                  {#if !approvedNotes.has(revTooltip.noteIndex)}
+                  {#if !tooltipApproved}
                     <button
                       class="rev-tooltip-approve"
-                      onclick={() => approveNote(revTooltip!.noteIndex)}
+                      onclick={() => {
+                        if (factCheckerInterrupted) {
+                          const note = interruptedFactNotes[revTooltip!.noteIndex]
+                          if (note) {
+                            const next = new Set(approvedFactNotes)
+                            next.add(note)
+                            approvedFactNotes = next
+                          }
+                        } else {
+                          approveNote(revTooltip!.noteIndex)
+                        }
+                        revTooltip = null
+                      }}
                     >
                       <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor"
                         ><path
@@ -980,7 +1017,30 @@
                   {/if}
                 </div>
               {/if}
-              {#if revisionNotes.length > 0 && !finalPost && firstDraftDone}
+              {#if factCheckerInterrupted}
+                <div class="fact-approval-incard">
+                  <p class="revision-notes-label">
+                    Fact-check issues — click highlights to approve, or:
+                  </p>
+                  <div class="fact-approval-actions">
+                    <button
+                      class="action-btn secondary"
+                      onclick={() => approveFactCheckerNotes(new Set(interruptedFactNotes))}
+                      disabled={running}
+                    >
+                      {#if running}<span class="spin"></span>{/if} Approve all & continue
+                    </button>
+                    <button
+                      class="action-btn"
+                      onclick={() => approveFactCheckerNotes(approvedFactNotes)}
+                      disabled={running}
+                    >
+                      {#if running}<span class="spin"></span> Resuming…{:else}Continue with {approvedFactNotes.size}/{interruptedFactNotes.length}
+                        approved{/if}
+                    </button>
+                  </div>
+                </div>
+              {:else if revisionNotes.length > 0 && !finalPost && firstDraftDone}
                 <div class="revision-notes">
                   <p class="revision-notes-label">Revision notes</p>
                   {#each revisionNotes as note}
@@ -1388,6 +1448,20 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .waiting-outline {
+    margin-top: 1rem;
+  }
+  .waiting-outline-text {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: pre-wrap;
+    margin: 0;
+    background: none;
+    border: none;
+    padding: 0;
+  }
   .waiting-sources-list a:hover {
     text-decoration: underline;
   }
@@ -1556,6 +1630,14 @@
     min-width: 0;
   }
 
+  /* ── Fact-checker approval ───────────────────────── */
+  .fact-approval-actions {
+    display: flex;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+  }
+
   .action-btn {
     background: #4f46e5;
     border: none;
@@ -1573,6 +1655,14 @@
       background 0.2s,
       transform 0.15s;
     margin-top: 0.75rem;
+  }
+  .action-btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+  }
+  .action-btn.secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+    transform: translateY(-1px);
   }
   .action-btn:hover:not(:disabled) {
     background: #4338ca;
@@ -1699,35 +1789,6 @@
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.2);
-  }
-
-  /* ── Markdown toggle ─────────────────────────────── */
-  .md-toggle {
-    background: none;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
-    color: rgba(255, 255, 255, 0.35);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.72rem;
-    font-weight: 500;
-    padding: 0.25rem 0.6rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    transition:
-      color 0.15s,
-      border-color 0.15s,
-      background 0.15s;
-  }
-  .md-toggle:hover {
-    color: rgba(255, 255, 255, 0.7);
-    border-color: rgba(255, 255, 255, 0.15);
-  }
-  .md-toggle.active {
-    color: #a5b4fc;
-    border-color: rgba(129, 140, 248, 0.35);
-    background: rgba(99, 102, 241, 0.08);
   }
 
   /* ── Prose ───────────────────────────────────────── */
@@ -2142,6 +2203,18 @@
     border-radius: 20px;
     padding: 0.2rem 0.6rem;
   }
+  .draft-raw {
+    font-family: 'Lora', Georgia, 'Times New Roman', serif;
+    font-size: 0.9375rem;
+    line-height: 1.8;
+    color: rgba(255, 255, 255, 0.72);
+    white-space: pre-wrap;
+    margin: 0;
+    background: none;
+    border: none;
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+  }
   .draft-body {
     font-family: 'Lora', Georgia, 'Times New Roman', serif;
     font-size: 0.9375rem;
@@ -2330,7 +2403,8 @@
     background: rgba(251, 191, 36, 0.28);
   }
 
-  .revision-notes {
+  .revision-notes,
+  .fact-approval-incard {
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     padding: 0.875rem 1.25rem;
     display: flex;
