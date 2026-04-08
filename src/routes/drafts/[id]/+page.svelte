@@ -309,7 +309,7 @@
               interruptedOutline = event.content
               running = false
               clearStallTimer()
-              scheduleSaveSession()
+              saveSessionNow()
             } else if (event.stage === 'interrupt' && event.type === 'sources') {
               sourcesInterrupted = true
               interruptedSources = event.sources
@@ -317,14 +317,14 @@
               checkedSources = new Set(event.sources.map(s => s.url))
               running = false
               clearStallTimer()
-              scheduleSaveSession()
+              saveSessionNow()
             } else if (event.stage === 'interrupt' && event.type === 'fact_checker') {
               factCheckerInterrupted = true
               interruptedFactNotes = event.notes
               approvedFactNotes = new Set()
               running = false
               clearStallTimer()
-              scheduleSaveSession()
+              saveSessionNow()
             } else if (event.stage === 'done') {
               currentDraft = event.post
               finalPost = event.post
@@ -524,7 +524,7 @@
     stalled = false
     stallTimer = setTimeout(() => {
       stalled = true
-    }, 25000)
+    }, 60000)
   }
   function clearStallTimer() {
     if (stallTimer) {
@@ -559,32 +559,44 @@
   }
 
   // ── Session persistence ──────────────────────────────────────────
+  function buildSessionData() {
+    return {
+      runId,
+      topic,
+      format,
+      tone,
+      wordCount,
+      stages,
+      currentDraft,
+      revisionNotes,
+      interrupted,
+      interruptedOutline,
+      sourcesInterrupted,
+      interruptedSources,
+      interruptedScores,
+      factCheckerInterrupted,
+      interruptedFactNotes
+    }
+  }
+
+  function saveSessionNow() {
+    if (isDemo || !runId || finalPost) return
+    fetch('/api/session', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(buildSessionData())
+    }).catch(() => {})
+  }
+
   function scheduleSaveSession() {
     if (isDemo) return
     if (saveSessionTimer) clearTimeout(saveSessionTimer)
-    saveSessionTimer = setTimeout(async () => {
+    saveSessionTimer = setTimeout(() => {
       if (!runId || finalPost) return
-      const data = {
-        runId,
-        topic,
-        format,
-        tone,
-        wordCount,
-        stages,
-        currentDraft,
-        revisionNotes,
-        interrupted,
-        interruptedOutline,
-        sourcesInterrupted,
-        interruptedSources,
-        interruptedScores,
-        factCheckerInterrupted,
-        interruptedFactNotes
-      }
-      await fetch('/api/session', {
+      fetch('/api/session', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(buildSessionData())
       }).catch(() => {})
     }, 800)
   }
@@ -771,11 +783,13 @@
                 ? 'Starting draft…'
                 : lastStageType === 'writer'
                   ? 'Fact-checking…'
-                  : lastStageType === 'fact_checker'
+                  : lastStageType === 'fact_checker' && thinkingNode !== 'editor'
                     ? 'Revising…'
-                    : lastStageType === 'editor'
-                      ? 'Generating SEO…'
-                      : 'Working…'
+                    : thinkingNode === 'editor' || lastStageType === 'writer'
+                      ? 'Final editing…'
+                      : lastStageType === 'editor'
+                        ? 'Generating SEO…'
+                        : 'Working…'
   )
 
   function onDraftClick(e: MouseEvent) {
@@ -981,7 +995,10 @@
                 <span
                   class="live-badge"
                   style="color:#a78bfa;border-color:rgba(167,139,250,0.25);background:rgba(167,139,250,0.08)"
-                  ><span class="live-dot" style="background:#a78bfa"></span>Revising…</span
+                  ><span class="live-dot" style="background:#a78bfa"></span>{thinkingNode ===
+                  'editor'
+                    ? 'Final editing…'
+                    : 'Revising…'}</span
                 >
               {:else if revisionNotes.length > 0}
                 <span class="revision-badge">revision highlights</span>
