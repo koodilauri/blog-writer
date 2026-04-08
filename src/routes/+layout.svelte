@@ -183,7 +183,7 @@
           onclick={() => (historyOpen = !historyOpen)}
           aria-label="Toggle history"
         >
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
             <path
               fill-rule="evenodd"
               d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 012 10z"
@@ -198,7 +198,7 @@
           title={historyCollapsed ? 'Show history' : 'Hide history'}
         >
           {#if historyCollapsed}
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
               <path
                 fill-rule="evenodd"
                 d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 012 10z"
@@ -206,7 +206,7 @@
               />
             </svg>
           {:else}
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
               <path
                 fill-rule="evenodd"
                 d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 012 10z"
@@ -261,7 +261,7 @@
 
       <div class="hd-right">
         <a href="/generate{isDemo ? '?demo' : ''}" class="new-post-btn" title="Start a new post">
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
             <path
               d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
             />
@@ -303,7 +303,7 @@
             onclick={() => (historyOpen = false)}
             aria-label="Close history"
           >
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
               <path
                 d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
               />
@@ -339,7 +339,7 @@
                     aria-label="Delete post"
                     title="Delete post"
                   >
-                    <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
                       <path
                         fill-rule="evenodd"
                         d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
@@ -408,7 +408,7 @@
                 title={pipelineOpen ? 'Hide pipeline' : 'Show pipeline'}
                 aria-label="Toggle pipeline panel"
               >
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
                   <path
                     fill-rule="evenodd"
                     d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
@@ -448,7 +448,7 @@
                       </div>
                       {#if stage.extra}
                         <span class="pip-chevron" class:rotated={expandedPipelineIdx === i}>
-                          <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
+                          <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
                             <path
                               fill-rule="evenodd"
                               d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z"
@@ -526,7 +526,7 @@
                 <div class="pip-stall">
                   <span>Taking longer than expected…</span>
                   <button class="pip-retry-btn" onclick={pipeline.onRetry}>
-                    <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
                       <path
                         fill-rule="evenodd"
                         d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
@@ -538,9 +538,9 @@
                 </div>
               {/if}
 
-              {#if pipeline.running && !pipeline.stalled}
+              {#if pipeline.running && !pipeline.stalled && !isDemo}
                 <button class="pip-pause-btn" onclick={pipeline.onPause}>
-                  <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
                     <rect x="4" y="3" width="4" height="14" rx="1" />
                     <rect x="12" y="3" width="4" height="14" rx="1" />
                   </svg>
@@ -563,7 +563,7 @@
                     <span>Generation paused.</span>
                   {/if}
                   <button class="pip-resume-btn" onclick={pipeline.onResume}>
-                    <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
                       <path
                         d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
                       />

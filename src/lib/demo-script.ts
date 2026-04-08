@@ -156,6 +156,10 @@ export function getDemoSteps(): DemoStep[] {
       }
     },
     {
+      delay: 1000,
+      data: { stage: 'source_approval', label: 'Sources approved' }
+    },
+    {
       delay: 1400,
       data: { stage: 'outliner', label: 'Outline ready', outline: OUTLINE }
     },
