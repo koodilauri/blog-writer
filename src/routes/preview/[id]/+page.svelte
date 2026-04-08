@@ -63,7 +63,7 @@
       </div>
       <div class="post-actions">
         <button class="copy-btn" onclick={() => copyToClipboard(data.post.post)}>
-          <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
             ><path
               d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
             /><path
@@ -123,7 +123,7 @@
               <li>
                 <button class="seo-copy-row" onclick={() => copyToClipboard(title)}>
                   <span>{title}</span>
-                  <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
                     ><path
                       d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
                     /><path
@@ -145,8 +145,8 @@
           >
             <span class="seo-desc">{data.post.seoMeta.metaDescription}</span>
             <svg
-              width="12"
-              height="12"
+              width="14"
+              height="14"
               viewBox="0 0 20 20"
               fill="currentColor"
               style="flex-shrink:0;margin-top:2px"
@@ -162,7 +162,7 @@
               <p class="seo-label">Slug</p>
               <button class="seo-copy-row" onclick={() => copyToClipboard(data.post.seoMeta!.slug)}>
                 <code class="seo-slug">{data.post.seoMeta.slug}</code>
-                <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
                   ><path
                     d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
                   /><path

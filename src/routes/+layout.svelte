@@ -1,3 +1,45 @@
+<script module lang="ts">
+  export type StageItem = {
+    label: string
+    detail?: string
+    isRevision?: boolean
+    extra?:
+      | { type: 'sources'; items: { url: string; title: string }[] }
+      | { type: 'list'; items: string[] }
+      | { type: 'markdown'; content: string }
+      | {
+          type: 'seo'
+          meta: { titles: string[]; metaDescription: string; tags: string[]; slug: string }
+        }
+    stageType?: string
+    preview?: string
+    isDone?: boolean
+  }
+  export type AppCtx = {
+    pipeline: {
+      active: boolean
+      stages: StageItem[]
+      running: boolean
+      stalled: boolean
+      paused: boolean
+      runId: string
+      firstDraftDone: boolean
+      writingDraft: string
+      revisionNotes: string[]
+      approvedNotes: Set<number>
+      thinkingNode: string
+      thinkingBuffer: string
+      factCheckerInterrupted: boolean
+      onRetry: () => void
+      onPause: () => void
+      onResume: () => void
+      onRevise: () => void
+      onApproveAll: () => void
+    }
+    refreshHistory: () => void
+  }
+</script>
+
 <script lang="ts">
   import { onMount, setContext } from 'svelte'
   import { goto } from '$app/navigation'
@@ -18,37 +60,16 @@
     format: string
     wordCount: string
   }
-  type Source = { url: string; title: string }
-  type SeoMeta = { titles: string[]; metaDescription: string; tags: string[]; slug: string }
-  type StageExtra =
-    | { type: 'sources'; items: Source[] }
-    | { type: 'list'; items: string[] }
-    | { type: 'markdown'; content: string }
-    | { type: 'seo'; meta: SeoMeta }
-  export type StageItem = {
-    label: string
-    detail?: string
-    isRevision?: boolean
-    extra?: StageExtra
-    stageType?: string
-    preview?: string
-    isDone?: boolean
-  }
-  export type AppCtx = {
-    pipeline: typeof pipeline
-    refreshHistory: () => void
-  }
-
   // ── Shell state ──────────────────────────────────────────────────────────
   let userEmail = $state('')
   let historyOpen = $state(false)
   let historyCollapsed = $state(false)
-  let historyItems = $state<PostListItem[]>([])
+  let historyItems = $state([] as PostListItem[])
   let loadingHistory = $state(false)
-  let postToDeleteId = $state<string | null>(null)
+  let postToDeleteId = $state(null as string | null)
 
   let pipelineOpen = $state(false)
-  let expandedPipelineIdx = $state<number | null>(null)
+  let expandedPipelineIdx = $state(null as number | null)
   let userClosedPipeline = $state(false)
 
   // Reactive context object — the drafts page writes into this
@@ -1615,7 +1636,7 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     }
     .sidebar-pipeline.open {
-      max-height: 45vh;
+      max-height: none;
       width: 100%;
       border-radius: 0;
       box-shadow: none;
