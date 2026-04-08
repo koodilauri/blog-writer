@@ -25,6 +25,38 @@
   --color-error: #f87171;
 }
 
+/* ── Page transition via View Transitions API ───────────────────────────── */
+/* Suppress the default whole-page cross-fade */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* Animate only the main content area */
+::view-transition-old(main-content) {
+  animation: vtOldFade 0.12s ease-out forwards;
+}
+::view-transition-new(main-content) {
+  animation: vtNewFade 0.18s ease-out forwards;
+}
+
+@keyframes vtOldFade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vtNewFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @layer base {
   html {
     background-color: #080c14;

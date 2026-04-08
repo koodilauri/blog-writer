@@ -32,7 +32,7 @@
     | { stage: 'source_approval'; label: string }
     | { stage: 'outliner'; label: string; outline?: string }
     | { stage: 'writer'; label: string; revisionCount?: number; changes?: string[] }
-    | { stage: 'writer_token'; token: string }
+    | { stage: 'writer_token'; token: string; node?: string }
     | { stage: 'thinking_token'; node: string; token: string }
     | {
         stage: 'fact_checker'
@@ -363,7 +363,9 @@
               thinkingBuffer += event.token
               if (event.node === 'outliner') writingOutline += event.token
             } else if (event.stage === 'writer_token') {
-              if (firstDraftDone && revisionNotes.length > 0) {
+              if (event.node === 'editor') {
+                thinkingNode = 'editor'
+              } else if (firstDraftDone && revisionNotes.length > 0) {
                 revisionNotes = []
                 approvedNotes = new Set()
               }
@@ -446,6 +448,10 @@
               lastStageType = event.stage
               scheduleSaveSession()
             } else if (event.stage === 'editor') {
+              thinkingNode = null
+              thinkingBuffer = ''
+              if (writingDraft) currentDraft = writingDraft
+              writingDraft = ''
               stages = [
                 ...stages,
                 {
@@ -738,7 +744,7 @@
     )
   )
   const draftHtml = $derived(
-    !firstDraftDone && writingDraft
+    writingDraft
       ? escHtml(writingDraft)
       : currentDraft
         ? factCheckerInterrupted

@@ -42,7 +42,7 @@
 
 <script lang="ts">
   import { onMount, setContext } from 'svelte'
-  import { goto } from '$app/navigation'
+  import { goto, onNavigate } from '$app/navigation'
   import { page } from '$app/state'
   import './layout.css'
   import favicon from '$lib/assets/favicon.svg'
@@ -134,6 +134,17 @@
 
   onMount(() => {
     if (page.url.pathname !== '/login') initShell()
+  })
+
+  // Trigger a View Transitions cross-fade on every client-side navigation
+  onNavigate(navigation => {
+    if (!document.startViewTransition) return
+    return new Promise(resolve => {
+      document.startViewTransition(async () => {
+        resolve()
+        await navigation.complete
+      })
+    })
   })
 
   // ── Functions ────────────────────────────────────────────────────────────
@@ -524,7 +535,13 @@
                       <span class="pip-dot spinning"></span>
                       <div class="pip-content">
                         <span class="pip-label">
-                          {pipeline.firstDraftDone ? 'Revising draft…' : 'Working…'}
+                          {pipeline.thinkingNode === 'editor'
+                            ? 'Final editing…'
+                            : pipeline.thinkingNode === 'seo'
+                              ? 'Generating SEO…'
+                              : pipeline.firstDraftDone
+                                ? 'Revising draft…'
+                                : 'Working…'}
                         </span>
                         {#if pipeline.writingDraft && pipeline.firstDraftDone}
                           <p class="pip-stream">
@@ -991,13 +1008,17 @@
   /* ── Left sidebar: History ─────────────────────────────────────────── */
   .sidebar-history {
     width: 256px;
-    min-width: 256px;
+    overflow: hidden;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
+    transition: width 0.22s ease;
+  }
+  /* Children keep a fixed width so they never reflow during the animation */
+  .sidebar-history .sidebar-header,
+  .sidebar-history .sidebar-body {
+    min-width: 256px;
   }
   .sidebar-history.collapsed {
     width: 0;
-    min-width: 0;
-    overflow: hidden;
   }
 
   .sidebar-body {
@@ -1091,6 +1112,7 @@
     z-index: 1;
     display: flex;
     flex-direction: column;
+    view-transition-name: main-content;
   }
 
   /* ── Right sidebar: Pipeline ───────────────────────────────────────── */
@@ -1104,8 +1126,14 @@
     overflow: hidden;
     margin: 24px 8px 24px 0;
     border-radius: 12px;
-    transition: width 0.18s ease;
+    transition: width 0.22s ease;
     flex-shrink: 0;
+  }
+  /* Prevent children from reflowing as the sidebar width animates.
+     overflow:hidden on the parent clips them — text never squishes. */
+  .sidebar-pipeline .sidebar-header,
+  .sidebar-pipeline .pipeline-body {
+    min-width: 284px;
   }
   .sidebar-pipeline.open {
     width: 284px;
@@ -1263,6 +1291,7 @@
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
   }
 
@@ -1618,6 +1647,12 @@
       display: none;
     }
 
+    /* Reset min-width on children — on narrow, width is 100% not 284px */
+    .sidebar-pipeline .sidebar-header,
+    .sidebar-pipeline .pipeline-body {
+      min-width: 0;
+    }
+
     /* Sidebar stacks above content; collapses to just the header row */
     .sidebar-pipeline {
       order: -1;
@@ -1636,7 +1671,7 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     }
     .sidebar-pipeline.open {
-      max-height: none;
+      max-height: 800px;
       width: 100%;
       border-radius: 0;
       box-shadow: none;

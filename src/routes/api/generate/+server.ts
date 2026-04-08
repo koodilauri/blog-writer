@@ -211,8 +211,8 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
               token = (content as Array<{ text?: string }>).map(c => c.text ?? '').join('')
             }
             if (!token) continue
-            if (nodeName === 'writer') {
-              send({ stage: 'writer_token', token })
+            if (nodeName === 'writer' || nodeName === 'editor') {
+              send({ stage: 'writer_token', token, node: nodeName })
             } else {
               send({ stage: 'thinking_token', node: nodeName, token })
             }
