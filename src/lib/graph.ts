@@ -5,6 +5,7 @@ import { sourceFetcherNode } from './agents/source-fetcher.js'
 import { sourceScorerNode } from './agents/source-scorer.js'
 import { sourceApprovalNode } from './agents/source-approval.js'
 import { outlinerNode } from './agents/outliner.js'
+import { outlinerApprovalNode } from './agents/outliner-approval.js'
 import { writerNode } from './agents/writer.js'
 import { factCheckerNode } from './agents/fact-checker.js'
 import { factCheckerApprovalNode } from './agents/fact-checker-approval.js'
@@ -41,6 +42,7 @@ export function buildGraph(checkpointer?: BaseCheckpointSaver) {
     .addNode('source_scorer', sourceScorerNode)
     .addNode('source_approval', sourceApprovalNode)
     .addNode('outliner', outlinerNode)
+    .addNode('outliner_approval', outlinerApprovalNode)
     .addNode('writer', writerNode)
     .addNode('fact_checker', factCheckerNode)
     .addNode('fact_checker_approval', factCheckerApprovalNode)
@@ -54,7 +56,8 @@ export function buildGraph(checkpointer?: BaseCheckpointSaver) {
       source_approval: 'source_approval'
     })
     .addEdge('source_approval', 'outliner')
-    .addEdge('outliner', 'writer')
+    .addEdge('outliner', 'outliner_approval')
+    .addEdge('outliner_approval', 'writer')
     .addEdge('writer', 'fact_checker')
     .addConditionalEdges('fact_checker', routeAfterFactCheck, {
       fact_checker_approval: 'fact_checker_approval',

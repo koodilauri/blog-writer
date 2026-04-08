@@ -1,7 +1,6 @@
 import type { GraphStateType } from './types.js'
 import { getModel } from '../model.js'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
-import { interrupt } from '@langchain/langgraph'
 
 const SYSTEM_PROMPT = `You are a content strategist creating a structured outline for a written piece.
 
@@ -45,8 +44,5 @@ export async function outlinerNode(state: GraphStateType): Promise<Partial<Graph
   const generated =
     typeof response.content === 'string' ? response.content : JSON.stringify(response.content)
 
-  // Pause and surface the outline to the user for review/editing
-  const outline = interrupt(generated) as string
-
-  return { outline }
+  return { outline: generated }
 }
