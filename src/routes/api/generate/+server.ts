@@ -170,9 +170,18 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
 
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (data: Record<string, unknown>) => {
+      let lastSentAt = Date.now()
+      const sendRaw = (data: Record<string, unknown>) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+        lastSentAt = Date.now()
       }
+      const send = sendRaw
+      const keepalive = setInterval(() => {
+        if (Date.now() - lastSentAt >= 8000) {
+          controller.enqueue(encoder.encode(':keepalive\n\n'))
+          lastSentAt = Date.now()
+        }
+      }, 8000)
 
       try {
         send({ stage: 'started', runId })
@@ -254,6 +263,7 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
         logger.error({ runId, error: message }, 'generate failed')
         send({ stage: 'error', error: message })
       } finally {
+        clearInterval(keepalive)
         controller.close()
       }
     }
