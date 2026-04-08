@@ -65,9 +65,12 @@
     approvedNotes: new Set<number>(),
     thinkingNode: '',
     thinkingBuffer: '',
+    factCheckerInterrupted: false,
     onRetry: () => {},
     onPause: () => {},
-    onResume: () => {}
+    onResume: () => {},
+    onRevise: () => {},
+    onApproveAll: () => {}
   })
 
   setContext('app', {
@@ -86,7 +89,12 @@
 
   // Auto-open the pipeline panel the moment generation starts (unless user explicitly closed it)
   $effect(() => {
-    if (pipeline.active && pipeline.running && !pipelineOpen && !userClosedPipeline) {
+    if (
+      pipeline.active &&
+      (pipeline.running || pipeline.factCheckerInterrupted) &&
+      !pipelineOpen &&
+      !userClosedPipeline
+    ) {
       pipelineOpen = true
     }
     if (!pipeline.active) {
@@ -561,6 +569,17 @@
                       />
                     </svg>
                     Resume
+                  </button>
+                </div>
+              {/if}
+
+              {#if pipeline.factCheckerInterrupted}
+                <div class="pip-fact-actions">
+                  <button class="pip-fact-btn pip-fact-revise" onclick={pipeline.onRevise}>
+                    Revise
+                  </button>
+                  <button class="pip-fact-btn pip-fact-approve" onclick={pipeline.onApproveAll}>
+                    Approve all
                   </button>
                 </div>
               {/if}
@@ -1394,6 +1413,40 @@
   }
   .pip-resume-btn:hover {
     background: rgba(99, 102, 241, 0.28);
+  }
+
+  /* Fact-checker approval buttons */
+  .pip-fact-actions {
+    display: flex;
+    gap: 0.375rem;
+    margin: 0.5rem 0.625rem 0;
+  }
+  .pip-fact-btn {
+    flex: 1;
+    border: none;
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.38rem 0.5rem;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .pip-fact-revise {
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    color: #a5b4fc;
+  }
+  .pip-fact-revise:hover {
+    background: rgba(99, 102, 241, 0.22);
+  }
+  .pip-fact-approve {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.22);
+    color: #4ade80;
+  }
+  .pip-fact-approve:hover {
+    background: rgba(34, 197, 94, 0.18);
   }
 
   /* Sidebar backdrop (mobile history) */

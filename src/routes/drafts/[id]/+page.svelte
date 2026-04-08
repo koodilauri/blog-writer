@@ -87,7 +87,13 @@
   let showResumePrompt = $state(false)
   let savedSession = $state<Record<string, unknown> | null>(null)
   let lastStageType = $state('')
-  let revTooltip = $state<{ note: string; noteIndex: number; x: number; y: number } | null>(null)
+  let revTooltip = $state<{
+    note: string
+    noteIndex: number
+    x: number
+    y: number
+    below: boolean
+  } | null>(null)
   let paused = $state(false)
   let approvedNotes = $state(new Set<number>())
   let factCheckerInterrupted = $state(false)
@@ -114,9 +120,12 @@
     writingDraft: string
     revisionNotes: string[]
     approvedNotes: Set<number>
+    factCheckerInterrupted: boolean
     onRetry: () => void
     onPause: () => void
     onResume: () => void
+    onRevise: () => void
+    onApproveAll: () => void
   }
   const appCtx = getContext<{ pipeline: PipelineCtx; refreshHistory: () => void }>('app')
 
@@ -133,9 +142,12 @@
     appCtx.pipeline.thinkingBuffer = thinkingBuffer
     appCtx.pipeline.revisionNotes = revisionNotes
     appCtx.pipeline.approvedNotes = approvedNotes
+    appCtx.pipeline.factCheckerInterrupted = factCheckerInterrupted
     appCtx.pipeline.onRetry = retryCurrentStep
     appCtx.pipeline.onPause = pauseGeneration
     appCtx.pipeline.onResume = resumeFromPause
+    appCtx.pipeline.onRevise = () => approveFactCheckerNotes(approvedFactNotes)
+    appCtx.pipeline.onApproveAll = () => approveFactCheckerNotes(new Set(interruptedFactNotes))
   })
 
   onDestroy(() => {
@@ -783,11 +795,13 @@
       return
     }
     const rect = mark.getBoundingClientRect()
+    const below = rect.top < 180
     revTooltip = {
       note: activeNotes[ni],
       noteIndex: ni,
       x: rect.left + rect.width / 2,
-      y: rect.top
+      y: below ? rect.bottom : rect.top,
+      below
     }
   }
 
@@ -984,7 +998,11 @@
                 {@const tooltipApproved = factCheckerInterrupted
                   ? approvedFactNotes.has(interruptedFactNotes[revTooltip.noteIndex])
                   : approvedNotes.has(revTooltip.noteIndex)}
-                <div class="rev-tooltip" style="left:{revTooltip.x}px;top:{revTooltip.y}px">
+                <div
+                  class="rev-tooltip"
+                  class:flip={revTooltip.below}
+                  style="left:{revTooltip.x}px;top:{revTooltip.y}px"
+                >
                   <p class="rev-tooltip-note">{revTooltip.note}</p>
                   {#if !tooltipApproved}
                     <button
@@ -1017,30 +1035,7 @@
                   {/if}
                 </div>
               {/if}
-              {#if factCheckerInterrupted}
-                <div class="fact-approval-incard">
-                  <p class="revision-notes-label">
-                    Fact-check issues — click highlights to approve, or:
-                  </p>
-                  <div class="fact-approval-actions">
-                    <button
-                      class="action-btn secondary"
-                      onclick={() => approveFactCheckerNotes(new Set(interruptedFactNotes))}
-                      disabled={running}
-                    >
-                      {#if running}<span class="spin"></span>{/if} Approve all & continue
-                    </button>
-                    <button
-                      class="action-btn"
-                      onclick={() => approveFactCheckerNotes(approvedFactNotes)}
-                      disabled={running}
-                    >
-                      {#if running}<span class="spin"></span> Resuming…{:else}Continue with {approvedFactNotes.size}/{interruptedFactNotes.length}
-                        approved{/if}
-                    </button>
-                  </div>
-                </div>
-              {:else if revisionNotes.length > 0 && !finalPost && firstDraftDone}
+              {#if revisionNotes.length > 0 && !finalPost && firstDraftDone && !factCheckerInterrupted}
                 <div class="revision-notes">
                   <p class="revision-notes-label">Revision notes</p>
                   {#each revisionNotes as note}
@@ -1630,14 +1625,6 @@
     min-width: 0;
   }
 
-  /* ── Fact-checker approval ───────────────────────── */
-  .fact-approval-actions {
-    display: flex;
-    gap: 0.625rem;
-    flex-wrap: wrap;
-    margin-top: 0.75rem;
-  }
-
   .action-btn {
     background: #4f46e5;
     border: none;
@@ -1655,14 +1642,6 @@
       background 0.2s,
       transform 0.15s;
     margin-top: 0.75rem;
-  }
-  .action-btn.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.7);
-  }
-  .action-btn.secondary:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.14);
-    transform: translateY(-1px);
   }
   .action-btn:hover:not(:disabled) {
     background: #4338ca;
@@ -2288,6 +2267,15 @@
     border: 6px solid transparent;
     border-top-color: rgba(251, 191, 36, 0.25);
   }
+  .rev-tooltip.flip {
+    transform: translate(-50%, 10px);
+  }
+  .rev-tooltip.flip::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: rgba(251, 191, 36, 0.25);
+  }
   .rev-tooltip-note {
     font-size: 0.78rem;
     line-height: 1.5;
@@ -2403,8 +2391,7 @@
     background: rgba(251, 191, 36, 0.28);
   }
 
-  .revision-notes,
-  .fact-approval-incard {
+  .revision-notes {
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     padding: 0.875rem 1.25rem;
     display: flex;
