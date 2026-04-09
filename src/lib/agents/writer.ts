@@ -1,5 +1,6 @@
 import type { GraphStateType } from './types.js'
 import { getModel } from '../model.js'
+import { logger } from '../logger.js'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 
 const FORMAT_INSTRUCTIONS: Record<string, string> = {
@@ -87,13 +88,35 @@ export async function writerNode(state: GraphStateType): Promise<Partial<GraphSt
   const model = getModel()
   const isRevision = state.factCheckerNotes.length > 0
 
+  logger.info(
+    {
+      node: 'writer',
+      isRevision,
+      revisionCount: state.revisionCount,
+      noteCount: state.factCheckerNotes.length
+    },
+    'llm call start'
+  )
+  const t0 = Date.now()
+
   const response = await model.invoke([
     new SystemMessage(buildSystemPrompt(state.format, state.tone, isRevision)),
     new HumanMessage(buildUserPrompt(state))
   ])
 
+  const durationMs = Date.now() - t0
   const content =
     typeof response.content === 'string' ? response.content : JSON.stringify(response.content)
+
+  logger.info(
+    {
+      node: 'writer',
+      durationMs,
+      responseLength: content.length,
+      hasDraftTag: content.includes('<draft>')
+    },
+    'llm call end'
+  )
 
   const { draft, changes } = parseDraftResponse(content, isRevision)
 

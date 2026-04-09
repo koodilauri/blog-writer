@@ -1,5 +1,6 @@
 import type { GraphStateType } from './types.js'
 import { getModel } from '../model.js'
+import { logger } from '../logger.js'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { z } from 'zod'
 
@@ -67,6 +68,16 @@ export async function factCheckerNode(state: GraphStateType): Promise<Partial<Gr
       ? `\n\n## Previously Reviewed & Approved by Human Editor\nThe following claims have already been reviewed and approved by the human editor. Do NOT flag these — they are considered acceptable:\n${state.approvedNotes.map(n => `- ${n}`).join('\n')}`
       : ''
 
+  logger.info(
+    {
+      node: 'fact_checker',
+      revisionCount: state.revisionCount,
+      approvedNotes: state.approvedNotes.length
+    },
+    'llm call start'
+  )
+  const t0 = Date.now()
+
   const response = await model.invoke([
     new SystemMessage(SYSTEM_PROMPT),
     new HumanMessage(
@@ -74,8 +85,11 @@ export async function factCheckerNode(state: GraphStateType): Promise<Partial<Gr
     )
   ])
 
+  const durationMs = Date.now() - t0
   const content =
     typeof response.content === 'string' ? response.content : JSON.stringify(response.content)
+
+  logger.info({ node: 'fact_checker', durationMs, responseLength: content.length }, 'llm call end')
 
   const jsonMatch = content.match(/\{[\s\S]*\}/)
   const parsed = jsonMatch
@@ -84,6 +98,10 @@ export async function factCheckerNode(state: GraphStateType): Promise<Partial<Gr
 
   if (!parsed.success) {
     // If parsing fails, approve to avoid blocking the pipeline
+    logger.warn(
+      { node: 'fact_checker', durationMs, responseLength: content.length },
+      'parse failed — auto-approving'
+    )
     return {
       approved: true,
       factCheckerNotes: [],
@@ -92,6 +110,7 @@ export async function factCheckerNode(state: GraphStateType): Promise<Partial<Gr
   }
 
   if (parsed.data.approved) {
+    logger.info({ node: 'fact_checker', durationMs, approved: true }, 'fact check result')
     return {
       approved: true,
       factCheckerNotes: [],
@@ -99,6 +118,10 @@ export async function factCheckerNode(state: GraphStateType): Promise<Partial<Gr
     }
   }
 
+  logger.info(
+    { node: 'fact_checker', durationMs, approved: false, issueCount: parsed.data.issues.length },
+    'fact check result'
+  )
   return {
     approved: false,
     factCheckerNotes: parsed.data.issues.map(formatIssueAsNote),

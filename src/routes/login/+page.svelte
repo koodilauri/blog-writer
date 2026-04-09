@@ -67,7 +67,7 @@
       <span>BlogWriter</span>
     </div>
 
-    <h1>Welcome back.</h1>
+    <h1>Login or try the demo</h1>
     <p class="sub">Sign in to continue writing.</p>
 
     <form onsubmit={onSubmit}>
