@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation'
   import { setAuth } from '$lib/auth'
   import { onMount } from 'svelte'
+  import { LoginResponseSchema } from '$lib/schemas/login'
 
   let email = ''
   let password = ''
@@ -25,7 +26,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password })
       })
-      const data = (await res.json()) as { user?: { email?: string }; error?: string }
+      const data = LoginResponseSchema.parse(await res.json())
       if (!res.ok) {
         error = data.error ?? 'Login failed'
         return
