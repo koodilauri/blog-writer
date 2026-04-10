@@ -5,7 +5,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "blog-writer",
-  "main": ".svelte-kit/cloudflare/_worker.js",
+  "main": "src/worker.ts",
   "compatibility_date": "2025-09-27",
   "compatibility_flags": ["nodejs_compat", "nodejs_als"],
   "assets": {
@@ -42,7 +42,24 @@
       "binding": "R2",
       "bucket_name": "post-writer-checkpoints"
     }
-  ]
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PIPELINE_DO",
+        "class_name": "PipelineDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["PipelineDurableObject"]
+    }
+  ],
+  "vars": {
+    "USE_OPENAI": "true"
+  }
   /**
    * Service Bindings (communicate between multiple Workers)
    * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings

@@ -1,6 +1,11 @@
 import type { GraphStateType, Source } from './types.js'
 import { z } from 'zod'
-import { env as privateEnv } from '$env/dynamic/private'
+
+let _braveApiKey = ''
+
+export function initSourceFetcherEnv(apiKey: string) {
+  _braveApiKey = apiKey
+}
 
 const BraveResultSchema = z.object({
   web: z
@@ -19,7 +24,7 @@ const BraveResultSchema = z.object({
 async function searchBrave(
   query: string
 ): Promise<Array<{ title: string; url: string; snippet: string }>> {
-  const apiKey = privateEnv.BRAVE_SEARCH_API_KEY
+  const apiKey = _braveApiKey
   if (!apiKey) throw new Error('Missing env var BRAVE_SEARCH_API_KEY')
 
   const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`

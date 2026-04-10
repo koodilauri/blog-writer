@@ -74,7 +74,12 @@
   let checkedSources = $state(new Set<string>())
   let addUrlsInput = $state('')
 
-  let controller: AbortController | null = null
+  type BrowserWS = {
+    send(data: string): void
+    close(code?: number, reason?: string): void
+    readyState: number
+  }
+  let ws: BrowserWS | null = null
   let stalled = $state(false)
   let stallTimer: ReturnType<typeof setTimeout> | null = null
   let saveSessionTimer: ReturnType<typeof setTimeout> | null = null
@@ -156,6 +161,7 @@
     appCtx.pipeline.running = false
     appCtx.pipeline.paused = false
     appCtx.pipeline.stalled = false
+    ws?.close()
   })
 
   onMount(async () => {
@@ -208,31 +214,76 @@
     clearSession()
   })
 
-  async function startGeneration() {
-    const endpoint = isDemo ? '/api/demo' : '/api/generate'
-    running = true
-    controller = new AbortController()
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ topic, format, tone, wordCount, runId: postId }),
-      signal: controller.signal
+  function openWs(id: string): Promise<BrowserWS> {
+    return new Promise((resolve, reject) => {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const socket: BrowserWS = new (globalThis as any).WebSocket(
+        `${proto}://${location.host}/api/pipeline?runId=${id}`
+      )
+      ;(socket as EventTarget).addEventListener('open', () => resolve(socket))
+      ;(socket as EventTarget).addEventListener('error', () =>
+        reject(new Error('WebSocket connection failed'))
+      )
+      ;(socket as EventTarget).addEventListener('message', (e: Event) => {
+        try {
+          handleEvent(JSON.parse((e as MessageEvent).data) as StageEvent)
+        } catch {
+          /* ignore malformed message */
+        }
+      })
+      ;(socket as EventTarget).addEventListener('close', (e: Event) => {
+        const ce = e as CloseEvent
+        ws = null
+        if (!ce.wasClean && ce.code !== 1000 && running) {
+          errorMsg = 'Connection closed unexpectedly'
+          running = false
+          canResume = !!runId
+          scheduleSaveSession()
+        }
+      })
+      ws = socket
     })
-    if (!res.ok || !res.body) {
-      if (res.status === 401) {
-        await goto('/login')
+  }
+
+  async function startGeneration() {
+    if (isDemo) {
+      running = true
+      const controller = new AbortController()
+      const res = await fetch('/api/demo', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ topic, format, tone, wordCount, runId: postId }),
+        signal: controller.signal
+      })
+      if (!res.ok || !res.body) {
+        if (res.status === 401) {
+          await goto('/login')
+          return
+        }
+        try {
+          const d = (await res.json()) as { error?: string }
+          errorMsg = d.error ?? `Request failed (${res.status})`
+        } catch {
+          errorMsg = `Request failed (${res.status})`
+        }
+        running = false
         return
       }
-      try {
-        const d = (await res.json()) as { error?: string }
-        errorMsg = d.error ?? `Request failed (${res.status})`
-      } catch {
-        errorMsg = `Request failed (${res.status})`
-      }
-      running = false
+      await consumeStream(res)
       return
     }
-    await consumeStream(res)
+
+    running = true
+    errorMsg = ''
+    runId = postId
+    try {
+      const socket = await openWs(runId)
+      socket.send(JSON.stringify({ type: 'start', runId, topic, format, tone, wordCount }))
+    } catch {
+      errorMsg = 'Failed to connect'
+      running = false
+    }
   }
 
   async function streamResume(body: {
@@ -256,31 +307,189 @@
     finalPost = ''
     sources = []
     seoMeta = null
-
-    controller = new AbortController()
     stalled = false
-    const res = await fetch('/api/resume', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: controller.signal
-    })
-    if (!res.ok || !res.body) {
-      if (res.status === 401) {
-        await goto('/login')
-        return
-      }
-      try {
-        const d = (await res.json()) as { error?: string }
-        errorMsg = d.error ?? `Request failed (${res.status})`
-      } catch {
-        errorMsg = `Request failed (${res.status})`
-      }
-      running = false
-      return
-    }
 
-    await consumeStream(res)
+    const msg = JSON.stringify({ type: 'resume', ...body })
+    try {
+      if (ws && ws.readyState === 1 /* OPEN */) {
+        ws.send(msg)
+      } else {
+        const socket = await openWs(body.runId)
+        socket.send(msg)
+      }
+    } catch {
+      errorMsg = 'Failed to connect'
+      running = false
+    }
+  }
+
+  function handleEvent(event: StageEvent) {
+    resetStallTimer()
+    if (event.stage === 'started') {
+      runId = event.runId
+    } else if (event.stage === 'interrupt' && event.type === 'outline') {
+      interrupted = true
+      interruptedOutline = event.content
+      running = false
+      clearStallTimer()
+      saveSessionNow()
+    } else if (event.stage === 'interrupt' && event.type === 'sources') {
+      sourcesInterrupted = true
+      interruptedSources = event.sources
+      interruptedScores = event.scores
+      checkedSources = new Set(event.sources.map(s => s.url))
+      running = false
+      clearStallTimer()
+      saveSessionNow()
+    } else if (event.stage === 'interrupt' && event.type === 'fact_checker') {
+      factCheckerInterrupted = true
+      interruptedFactNotes = event.notes
+      approvedFactNotes = new Set()
+      running = false
+      clearStallTimer()
+      saveSessionNow()
+    } else if (event.stage === 'done') {
+      currentDraft = event.post
+      finalPost = event.post
+      sources = event.sources ?? []
+      seoMeta = event.seoMeta ?? null
+      running = false
+      clearStallTimer()
+      clearSession()
+      stages = [...stages, { label: 'Post complete', stageType: 'done', isDone: true }]
+      if (!isDemo) {
+        fetch('/api/posts', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            runId,
+            topic,
+            format,
+            tone,
+            wordCount,
+            post: event.post,
+            sources: event.sources ?? [],
+            seoMeta: event.seoMeta ?? null
+          })
+        })
+          .then(() => appCtx.refreshHistory())
+          .catch(() => {})
+      }
+    } else if (event.stage === 'error') {
+      errorMsg = event.error
+      canResume = !!runId
+      running = false
+      clearStallTimer()
+      scheduleSaveSession()
+    } else if (event.stage === 'thinking_token') {
+      thinkingNode = event.node
+      thinkingBuffer += event.token
+      if (event.node === 'outliner') writingOutline += event.token
+    } else if (event.stage === 'writer_token') {
+      if (event.node === 'editor') {
+        thinkingNode = 'editor'
+      } else if (firstDraftDone && revisionNotes.length > 0) {
+        revisionNotes = []
+        approvedNotes = new Set()
+      }
+      writingDraft += event.token
+    } else if (
+      event.stage === 'query_generator' ||
+      event.stage === 'source_fetcher' ||
+      event.stage === 'source_approval'
+    ) {
+      thinkingNode = null
+      thinkingBuffer = ''
+      stages = [...stages, { label: event.label, stageType: event.stage }]
+      lastStageType = event.stage
+      scheduleSaveSession()
+    } else if (event.stage === 'source_scorer') {
+      const srcs = event.sources ?? []
+      stages = [
+        ...stages,
+        {
+          label: event.label,
+          stageType: event.stage,
+          extra: srcs.length > 0 ? { type: 'sources', items: srcs } : undefined
+        }
+      ]
+      lastStageType = event.stage
+      scheduleSaveSession()
+    } else if (event.stage === 'outliner') {
+      thinkingNode = null
+      thinkingBuffer = ''
+      writingOutline = ''
+      stages = [
+        ...stages,
+        {
+          label: event.label,
+          stageType: event.stage,
+          extra: event.outline ? { type: 'markdown', content: event.outline } : undefined,
+          preview: event.outline ? event.outline.slice(0, 240) : undefined
+        }
+      ]
+      lastStageType = event.stage
+      scheduleSaveSession()
+    } else if (event.stage === 'writer') {
+      thinkingNode = null
+      thinkingBuffer = ''
+      if (writingDraft) currentDraft = writingDraft
+      writingDraft = ''
+      stages = [
+        ...stages,
+        {
+          label: event.label,
+          stageType: event.stage,
+          extra:
+            (event.changes ?? []).length > 0 ? { type: 'list', items: event.changes! } : undefined
+        }
+      ]
+      lastStageType = event.stage
+      scheduleSaveSession()
+    } else if (event.stage === 'fact_checker') {
+      if (writingDraft) currentDraft = writingDraft
+      firstDraftDone = true
+      revisionNotes = event.approved ? [] : (event.notes ?? [])
+      const detail = event.approved
+        ? '✓ approved'
+        : `✗ revision ${(event.revisionCount ?? 0) + 1} needed`
+      stages = [
+        ...stages,
+        {
+          label: event.label,
+          stageType: event.stage,
+          detail,
+          isRevision: !event.approved,
+          extra: (event.notes ?? []).length > 0 ? { type: 'list', items: event.notes! } : undefined
+        }
+      ]
+      lastStageType = event.stage
+      scheduleSaveSession()
+    } else if (event.stage === 'editor') {
+      thinkingNode = null
+      thinkingBuffer = ''
+      if (writingDraft) currentDraft = writingDraft
+      writingDraft = ''
+      stages = [
+        ...stages,
+        {
+          label: event.label,
+          stageType: event.stage,
+          extra: (event.notes ?? []).length > 0 ? { type: 'list', items: event.notes! } : undefined
+        }
+      ]
+      lastStageType = event.stage
+    } else if (event.stage === 'seo') {
+      stages = [
+        ...stages,
+        {
+          label: event.label,
+          stageType: event.stage,
+          extra: event.meta ? { type: 'seo', meta: event.meta } : undefined
+        }
+      ]
+      lastStageType = event.stage
+    }
   }
 
   async function consumeStream(res: Response) {
@@ -293,188 +502,13 @@
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        resetStallTimer()
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
-
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           try {
-            const event = JSON.parse(line.slice(6)) as StageEvent
-            if (event.stage === 'started') {
-              runId = event.runId
-            } else if (event.stage === 'interrupt' && event.type === 'outline') {
-              interrupted = true
-              interruptedOutline = event.content
-              running = false
-              clearStallTimer()
-              saveSessionNow()
-            } else if (event.stage === 'interrupt' && event.type === 'sources') {
-              sourcesInterrupted = true
-              interruptedSources = event.sources
-              interruptedScores = event.scores
-              checkedSources = new Set(event.sources.map(s => s.url))
-              running = false
-              clearStallTimer()
-              saveSessionNow()
-            } else if (event.stage === 'interrupt' && event.type === 'fact_checker') {
-              factCheckerInterrupted = true
-              interruptedFactNotes = event.notes
-              approvedFactNotes = new Set()
-              running = false
-              clearStallTimer()
-              saveSessionNow()
-            } else if (event.stage === 'done') {
-              currentDraft = event.post
-              finalPost = event.post
-              sources = event.sources ?? []
-              seoMeta = event.seoMeta ?? null
-              running = false
-              clearStallTimer()
-              clearSession()
-              stages = [...stages, { label: 'Post complete', stageType: 'done', isDone: true }]
-              if (!isDemo) {
-                fetch('/api/posts', {
-                  method: 'POST',
-                  headers: { 'content-type': 'application/json' },
-                  body: JSON.stringify({
-                    runId,
-                    topic,
-                    format,
-                    tone,
-                    wordCount,
-                    post: event.post,
-                    sources: event.sources ?? [],
-                    seoMeta: event.seoMeta ?? null
-                  })
-                })
-                  .then(() => appCtx.refreshHistory())
-                  .catch(() => {})
-              }
-            } else if (event.stage === 'error') {
-              errorMsg = event.error
-              canResume = !!runId
-              running = false
-              clearStallTimer()
-              scheduleSaveSession()
-            } else if (event.stage === 'thinking_token') {
-              thinkingNode = event.node
-              thinkingBuffer += event.token
-              if (event.node === 'outliner') writingOutline += event.token
-            } else if (event.stage === 'writer_token') {
-              if (event.node === 'editor') {
-                thinkingNode = 'editor'
-              } else if (firstDraftDone && revisionNotes.length > 0) {
-                revisionNotes = []
-                approvedNotes = new Set()
-              }
-              writingDraft += event.token
-            } else if (
-              event.stage === 'query_generator' ||
-              event.stage === 'source_fetcher' ||
-              event.stage === 'source_approval'
-            ) {
-              thinkingNode = null
-              thinkingBuffer = ''
-              stages = [...stages, { label: event.label, stageType: event.stage }]
-              lastStageType = event.stage
-              scheduleSaveSession()
-            } else if (event.stage === 'source_scorer') {
-              const srcs = event.sources ?? []
-              stages = [
-                ...stages,
-                {
-                  label: event.label,
-                  stageType: event.stage,
-                  extra: srcs.length > 0 ? { type: 'sources', items: srcs } : undefined
-                }
-              ]
-              lastStageType = event.stage
-              scheduleSaveSession()
-            } else if (event.stage === 'outliner') {
-              thinkingNode = null
-              thinkingBuffer = ''
-              writingOutline = ''
-              stages = [
-                ...stages,
-                {
-                  label: event.label,
-                  stageType: event.stage,
-                  extra: event.outline ? { type: 'markdown', content: event.outline } : undefined,
-                  preview: event.outline ? event.outline.slice(0, 240) : undefined
-                }
-              ]
-              lastStageType = event.stage
-              scheduleSaveSession()
-            } else if (event.stage === 'writer') {
-              thinkingNode = null
-              thinkingBuffer = ''
-              if (writingDraft) currentDraft = writingDraft
-              writingDraft = ''
-              stages = [
-                ...stages,
-                {
-                  label: event.label,
-                  stageType: event.stage,
-                  extra:
-                    (event.changes ?? []).length > 0
-                      ? { type: 'list', items: event.changes! }
-                      : undefined
-                }
-              ]
-              lastStageType = event.stage
-              scheduleSaveSession()
-            } else if (event.stage === 'fact_checker') {
-              if (writingDraft) currentDraft = writingDraft
-              firstDraftDone = true
-              revisionNotes = event.approved ? [] : (event.notes ?? [])
-              const detail = event.approved
-                ? '✓ approved'
-                : `✗ revision ${(event.revisionCount ?? 0) + 1} needed`
-              stages = [
-                ...stages,
-                {
-                  label: event.label,
-                  stageType: event.stage,
-                  detail,
-                  isRevision: !event.approved,
-                  extra:
-                    (event.notes ?? []).length > 0
-                      ? { type: 'list', items: event.notes! }
-                      : undefined
-                }
-              ]
-              lastStageType = event.stage
-              scheduleSaveSession()
-            } else if (event.stage === 'editor') {
-              thinkingNode = null
-              thinkingBuffer = ''
-              if (writingDraft) currentDraft = writingDraft
-              writingDraft = ''
-              stages = [
-                ...stages,
-                {
-                  label: event.label,
-                  stageType: event.stage,
-                  extra:
-                    (event.notes ?? []).length > 0
-                      ? { type: 'list', items: event.notes! }
-                      : undefined
-                }
-              ]
-              lastStageType = event.stage
-            } else if (event.stage === 'seo') {
-              stages = [
-                ...stages,
-                {
-                  label: event.label,
-                  stageType: event.stage,
-                  extra: event.meta ? { type: 'seo', meta: event.meta } : undefined
-                }
-              ]
-              lastStageType = event.stage
-            }
+            handleEvent(JSON.parse(line.slice(6)) as StageEvent)
           } catch {
             /* ignore malformed SSE */
           }
@@ -519,7 +553,7 @@
   function goBack() {
     if (running) {
       if (!window.confirm('Generation is still running. Leave anyway?')) return
-      controller?.abort()
+      ws?.close(1000, 'navigate away')
     }
     goto('/generate')
   }
@@ -540,13 +574,14 @@
     stalled = false
   }
   async function retryCurrentStep() {
-    controller?.abort()
+    ws?.close(1000, 'retry')
     clearStallTimer()
     if (runId) await streamResume({ runId })
   }
 
   function pauseGeneration() {
-    controller?.abort()
+    ws?.close(1000, 'pause')
+    ws = null
     clearStallTimer()
     running = false
     paused = true
