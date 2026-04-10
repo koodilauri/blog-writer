@@ -3,6 +3,13 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import { marked } from 'marked'
+  import { escHtml, findRevisionRanges, renderHighlighted } from '$lib/claim-span'
+  import { getActivityLabel } from '$lib/activity-labels'
+  import ActivitySpinner from '$lib/components/ActivitySpinner.svelte'
+  import OutlineApproval from '$lib/components/OutlineApproval.svelte'
+  import SourceCard from '$lib/components/SourceCard.svelte'
+  import DraftViewer from '$lib/components/DraftViewer.svelte'
+  import SeoPanel from '$lib/components/SeoPanel.svelte'
 
   function renderMd(text: string): string {
     return marked.parse(text, { async: false }) as string
@@ -123,6 +130,8 @@
     runId: string
     firstDraftDone: boolean
     writingDraft: string
+    thinkingNode: string
+    thinkingBuffer: string
     revisionNotes: string[]
     approvedNotes: Set<number>
     factCheckerInterrupted: boolean
@@ -680,99 +689,7 @@
     goto('/generate')
   }
 
-  // ── Revision highlighting ────────────────────────────────────────
-  function escHtml(s: string) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  }
-  function findClaimSpan(draft: string, claim: string): { start: number; end: number } | null {
-    const dLow = draft.toLowerCase()
-    const cLow = claim.toLowerCase().trim()
-    const exact = dLow.indexOf(cLow)
-    if (exact !== -1) return { start: exact, end: exact + cLow.length }
-    const claimWords = cLow.match(/\w+/g) ?? []
-    if (claimWords.length < 4) return null
-    const anchor = claimWords[0]
-    const lastW = claimWords[claimWords.length - 1]
-    let pos = 0
-    let bestRange: { start: number; end: number } | null = null
-    let bestScore = 0.6
-    while (true) {
-      const anchorPos = dLow.indexOf(anchor, pos)
-      if (anchorPos === -1) break
-      const windowEnd = Math.min(draft.length, anchorPos + Math.ceil(claim.length * 1.5))
-      const window = dLow.slice(anchorPos, windowEnd)
-      const windowWords = new Set(window.match(/\w+/g) ?? [])
-      const score = claimWords.filter(w => windowWords.has(w)).length / claimWords.length
-      if (score > bestScore) {
-        bestScore = score
-        const lastInWindow = window.lastIndexOf(lastW)
-        const end =
-          lastInWindow !== -1
-            ? anchorPos + lastInWindow + lastW.length
-            : Math.min(draft.length, anchorPos + claim.length)
-        bestRange = { start: anchorPos, end: end }
-      }
-      pos = anchorPos + 1
-    }
-    return bestRange
-  }
-  function findRevisionRanges(draft: string, notes: string[], skipIndices?: Set<number>) {
-    const parts = draft.split(/(\n\n+)/)
-    const paragraphs: { text: string; start: number; end: number }[] = []
-    let pOffset = 0
-    for (const part of parts) {
-      if (!/^\n+$/.test(part) && part.trim()) {
-        paragraphs.push({ text: part, start: pOffset, end: pOffset + part.length })
-      }
-      pOffset += part.length
-    }
-    const ranges: { start: number; end: number; noteIndex: number }[] = []
-    for (let ni = 0; ni < notes.length; ni++) {
-      if (skipIndices?.has(ni)) continue
-      const claimMatch = notes[ni].match(/^Claim:\s*"([^"]+)"/)
-      if (claimMatch) {
-        const span = findClaimSpan(draft, claimMatch[1])
-        if (span) {
-          ranges.push({ ...span, noteIndex: ni })
-          continue
-        }
-      }
-      const matchText = claimMatch ? claimMatch[1] : notes[ni]
-      const matchWords = matchText.toLowerCase().match(/\w+/g) ?? []
-      if (!matchWords.length) continue
-      let bestPara: (typeof paragraphs)[0] | null = null
-      let bestRatio = 0.38
-      for (const para of paragraphs) {
-        const paraWords = new Set(para.text.toLowerCase().match(/\w+/g) ?? [])
-        const hits = matchWords.filter(w => paraWords.has(w)).length
-        const ratio = hits / matchWords.length
-        if (ratio > bestRatio) {
-          bestRatio = ratio
-          bestPara = para
-        }
-      }
-      if (bestPara) {
-        ranges.push({ start: bestPara.start, end: bestPara.end, noteIndex: ni })
-      }
-    }
-    return ranges
-  }
-  function renderHighlighted(
-    text: string,
-    ranges: { start: number; end: number; noteIndex: number }[]
-  ) {
-    if (!ranges.length) return escHtml(text)
-    const sorted = [...ranges].sort((a, b) => a.start - b.start)
-    let out = ''
-    let pos = 0
-    for (const r of sorted) {
-      if (r.start > pos) out += escHtml(text.slice(pos, r.start))
-      out += `<mark class="rev-mark" data-note="${r.noteIndex}">${escHtml(text.slice(r.start, r.end))}</mark>`
-      pos = r.end
-    }
-    if (pos < text.length) out += escHtml(text.slice(pos))
-    return out
-  }
+  // ── Revision highlighting ── moved to $lib/claim-span
   const approvedFactNoteIndices = $derived(
     new Set(
       interruptedFactNotes.map((n, i) => (approvedFactNotes.has(n) ? i : -1)).filter(i => i !== -1)
@@ -809,29 +726,7 @@
             | undefined
         )?.items ?? [])
   )
-  const currentActivity = $derived(
-    stalled
-      ? 'Stalled'
-      : lastStageType === 'query_generator'
-        ? 'Fetching sources…'
-        : lastStageType === 'source_fetcher'
-          ? 'Scoring sources…'
-          : lastStageType === 'source_scorer'
-            ? 'Waiting for source approval…'
-            : lastStageType === 'source_approval'
-              ? 'Generating outline…'
-              : lastStageType === 'outliner'
-                ? 'Starting draft…'
-                : lastStageType === 'writer'
-                  ? 'Fact-checking…'
-                  : lastStageType === 'fact_checker' && thinkingNode !== 'editor'
-                    ? 'Revising…'
-                    : thinkingNode === 'editor' || lastStageType === 'writer'
-                      ? 'Final editing…'
-                      : lastStageType === 'editor'
-                        ? 'Generating SEO…'
-                        : 'Working…'
-  )
+  const currentActivity = $derived(getActivityLabel(stalled, lastStageType, thinkingNode))
 
   function onDraftClick(e: MouseEvent) {
     const mark = (e.target as HTMLElement).closest('[data-note]') as HTMLElement | null
@@ -911,33 +806,7 @@
     {#if stages.length > 0 || running || currentDraft || sourcesInterrupted || interrupted || factCheckerInterrupted}
       <div>
         {#if running && !currentDraft && !writingDraft && !sourcesInterrupted && !interrupted && !factCheckerInterrupted}
-          <!-- Waiting view: show sources as they come in -->
-          <section class="card waiting-card">
-            <div class="waiting-header">
-              <span class="spin-sm"></span>
-              <span class="waiting-label">{currentActivity}</span>
-            </div>
-            {#if liveSources.length > 0}
-              <div class="waiting-sources">
-                <p class="waiting-sources-label">Sources found</p>
-                <ul class="waiting-sources-list">
-                  {#each liveSources as s}
-                    <li>
-                      <a href={s.url} target="_blank" rel="noopener noreferrer"
-                        >{s.title || s.url}</a
-                      >
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
-            {#if writingOutline}
-              <div class="waiting-outline">
-                <p class="waiting-sources-label">Generating outline…</p>
-                <pre class="waiting-outline-text">{writingOutline}</pre>
-              </div>
-            {/if}
-          </section>
+          <ActivitySpinner activity={currentActivity} sources={liveSources} {writingOutline} />
         {:else if sourcesInterrupted}
           <section class="card review-sources-card">
             <div class="card-head">
@@ -946,24 +815,13 @@
             </div>
             <ul class="source-list">
               {#each interruptedSources as source, i}
-                {@const score = interruptedScores[i] ?? 3}
-                <li class="source-item">
-                  <input
-                    type="checkbox"
-                    checked={checkedSources.has(source.url)}
-                    onchange={() => toggleSource(source.url)}
-                    class="source-check"
-                  />
-                  <span
-                    class="score-badge"
-                    class:high={score >= 4}
-                    class:mid={score === 3}
-                    class:low={score < 3}>{score}/5</span
-                  >
-                  <a href={source.url} target="_blank" rel="noopener noreferrer" class="source-link"
-                    >{source.title || source.url}</a
-                  >
-                </li>
+                <SourceCard
+                  url={source.url}
+                  title={source.title}
+                  score={interruptedScores[i] ?? 3}
+                  checked={checkedSources.has(source.url)}
+                  ontoggle={() => toggleSource(source.url)}
+                />
               {/each}
             </ul>
             <div class="field" style="margin-top: 1rem;">
@@ -984,140 +842,33 @@
             </button>
           </section>
         {:else if interrupted}
-          <section class="card">
-            <div class="card-head">
-              <h2>Review Outline</h2>
-              <p>Edit below, then continue to start writing.</p>
-            </div>
-            <div class="field">
-              <textarea bind:value={interruptedOutline} class="outline-textarea"></textarea>
-            </div>
-            <button class="action-btn" onclick={resumeWithOutline} disabled={running}>
-              {#if running}<span class="spin"></span> Resuming…{:else}Continue with this outline{/if}
-            </button>
-          </section>
+          <OutlineApproval
+            bind:outline={interruptedOutline}
+            {running}
+            onresume={resumeWithOutline}
+          />
         {:else if currentDraft || writingDraft}
-          <section class="card draft-card">
-            <div class="draft-card-header">
-              <h2>{finalPost ? 'Generated Post' : 'Draft'}</h2>
-              {#if finalPost}
-                <div class="result-actions">
-                  {#if sources.length > 0}
-                    <details class="sources-detail">
-                      <summary>{sources.length} source{sources.length !== 1 ? 's' : ''}</summary>
-                      <div class="sources-popup">
-                        <p class="sources-popup-label">Sources</p>
-                        <ul>
-                          {#each sources as s}
-                            <li>
-                              <a href={s.url} target="_blank" rel="noopener noreferrer"
-                                >{s.title || s.url}</a
-                              >
-                            </li>
-                          {/each}
-                        </ul>
-                      </div>
-                    </details>
-                  {/if}
-                  <button class="copy-btn" onclick={() => copyToClipboard(finalPost)}>
-                    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
-                      ><path
-                        d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
-                      /><path
-                        d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
-                      /></svg
-                    >
-                    Copy
-                  </button>
-                </div>
-              {:else if running && !firstDraftDone}
-                <span class="live-badge"><span class="live-dot"></span>Writing first draft…</span>
-              {:else if running}
-                <span
-                  class="live-badge"
-                  style="color:#a78bfa;border-color:rgba(167,139,250,0.25);background:rgba(167,139,250,0.08)"
-                  ><span class="live-dot" style="background:#a78bfa"></span>{thinkingNode ===
-                  'editor'
-                    ? 'Final editing…'
-                    : 'Revising…'}</span
-                >
-              {:else if revisionNotes.length > 0}
-                <span class="revision-badge">revision highlights</span>
-              {/if}
-            </div>
-            {#if draftHtml}
-              {#if finalPost}
-                <pre class="draft-body draft-raw">{finalPost}</pre>
-              {:else}
-                <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-                <div class="draft-body" onclick={onDraftClick}>{@html draftHtml}</div>
-              {/if}
-              {#if revTooltip}
-                {@const tooltipApproved = factCheckerInterrupted
-                  ? approvedFactNotes.has(interruptedFactNotes[revTooltip.noteIndex])
-                  : approvedNotes.has(revTooltip.noteIndex)}
-                <div
-                  class="rev-tooltip"
-                  class:flip={revTooltip.below}
-                  style="left:{revTooltip.x}px;top:{revTooltip.y}px"
-                >
-                  <p class="rev-tooltip-note">{revTooltip.note}</p>
-                  {#if !tooltipApproved}
-                    <button
-                      class="rev-tooltip-approve"
-                      onclick={() => {
-                        if (factCheckerInterrupted) {
-                          const note = interruptedFactNotes[revTooltip!.noteIndex]
-                          if (note) {
-                            const next = new Set(approvedFactNotes)
-                            next.add(note)
-                            approvedFactNotes = next
-                          }
-                        } else {
-                          approveNote(revTooltip!.noteIndex)
-                        }
-                        revTooltip = null
-                      }}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"
-                        ><path
-                          fill-rule="evenodd"
-                          d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                          clip-rule="evenodd"
-                        /></svg
-                      >
-                      Mark as OK
-                    </button>
-                  {:else}
-                    <span class="rev-tooltip-approved">✓ Approved</span>
-                  {/if}
-                </div>
-              {/if}
-              {#if revisionNotes.length > 0 && !finalPost && firstDraftDone && !factCheckerInterrupted}
-                <div class="revision-notes">
-                  <p class="revision-notes-label">Revision notes</p>
-                  {#each revisionNotes as note}
-                    <div class="revision-note-item">
-                      <span class="revision-note-bullet">–</span>
-                      <span>{note}</span>
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-              {#if finalPost}
-                <div class="post-footer">
-                  <span>{finalPost.trim().split(/\s+/).filter(Boolean).length} words</span>
-                  <span>·</span>
-                  <span>{finalPost.length} chars</span>
-                </div>
-              {/if}
-            {:else}
-              <div class="draft-empty">
-                <span class="spin-sm"></span>
-                <span>Writing first draft…</span>
-              </div>
-            {/if}
-          </section>
+          <DraftViewer
+            {finalPost}
+            {currentDraft}
+            {writingDraft}
+            {running}
+            {firstDraftDone}
+            {thinkingNode}
+            {revisionNotes}
+            {approvedNotes}
+            {factCheckerInterrupted}
+            {interruptedFactNotes}
+            {approvedFactNotes}
+            {sources}
+            oncopy={copyToClipboard}
+            onapprovenote={approveNote}
+            onapproveFactNote={note => {
+              const next = new Set(approvedFactNotes)
+              next.add(note)
+              approvedFactNotes = next
+            }}
+          />
         {/if}
       </div>
     {/if}
@@ -1145,77 +896,7 @@
 
     <!-- SEO (shown after generation completes) -->
     {#if finalPost && seoMeta}
-      <section class="card">
-        <div class="card-head">
-          <h2>SEO Metadata</h2>
-          <p>Click any item to copy.</p>
-        </div>
-
-        <div class="seo-section">
-          <p class="seo-label">Title options</p>
-          <ul class="seo-titles">
-            {#each seoMeta.titles as title}
-              <li>
-                <button class="seo-copy-row" onclick={() => copyToClipboard(title)}>
-                  <span>{title}</span>
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
-                    ><path
-                      d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
-                    /><path
-                      d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
-                    /></svg
-                  >
-                </button>
-              </li>
-            {/each}
-          </ul>
-        </div>
-
-        <div class="seo-section">
-          <p class="seo-label">
-            Meta description <span class="seo-count">({seoMeta.metaDescription.length} chars)</span>
-          </p>
-          <button class="seo-copy-row" onclick={() => copyToClipboard(seoMeta!.metaDescription)}>
-            <span class="seo-desc">{seoMeta.metaDescription}</span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              style="flex-shrink:0;margin-top:2px"
-              ><path
-                d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
-              /><path
-                d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
-              /></svg
-            >
-          </button>
-        </div>
-
-        <div class="seo-two-col">
-          <div class="seo-section">
-            <p class="seo-label">Slug</p>
-            <button class="seo-copy-row" onclick={() => copyToClipboard(seoMeta!.slug)}>
-              <code class="seo-slug">{seoMeta.slug}</code>
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
-                ><path
-                  d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"
-                /><path
-                  d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"
-                /></svg
-              >
-            </button>
-          </div>
-          <div class="seo-section">
-            <p class="seo-label">Tags</p>
-            <div class="seo-tags">
-              {#each seoMeta.tags as tag}
-                <button class="tag-chip" onclick={() => copyToClipboard(tag)}>{tag}</button>
-              {/each}
-            </div>
-          </div>
-        </div>
-      </section>
+      <SeoPanel {seoMeta} oncopy={copyToClipboard} />
     {/if}
   {/if}
 </main>
@@ -1459,66 +1140,6 @@
     padding: 1.5rem;
   }
 
-  /* ── Waiting / sources-found view ─────────────────── */
-  .waiting-card {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-  }
-  .waiting-header {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 0.85rem;
-  }
-  .waiting-label {
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 0.85rem;
-  }
-  .waiting-sources-label {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.2);
-    margin: 0 0 0.6rem;
-  }
-  .waiting-sources-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
-  .waiting-sources-list a {
-    font-size: 0.82rem;
-    color: #818cf8;
-    text-decoration: none;
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .waiting-outline {
-    margin-top: 1rem;
-  }
-  .waiting-outline-text {
-    font-family: 'Lora', Georgia, serif;
-    font-size: 0.85rem;
-    line-height: 1.7;
-    color: rgba(255, 255, 255, 0.45);
-    white-space: pre-wrap;
-    margin: 0;
-    background: none;
-    border: none;
-    padding: 0;
-  }
-  .waiting-sources-list a:hover {
-    text-decoration: underline;
-  }
-
   .card-head {
     margin-bottom: 1.25rem;
   }
@@ -1576,6 +1197,16 @@
     border-color: rgba(129, 140, 248, 0.5);
     background: rgba(129, 140, 248, 0.06);
     box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.08);
+  }
+
+  /* ── Source approval ─────────────────────────────── */
+  .source-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
   /* ── Pipeline ─────────────────────────────────────── */
@@ -1642,46 +1273,6 @@
     flex-direction: column;
     gap: 0.5rem;
   }
-  .source-item {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-  }
-  .source-check {
-    width: 15px;
-    height: 15px;
-    flex-shrink: 0;
-    cursor: pointer;
-    accent-color: #4f46e5;
-  }
-  .score-badge {
-    font-size: 0.68rem;
-    font-weight: 700;
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
-    flex-shrink: 0;
-  }
-  .score-badge.high {
-    background: rgba(74, 222, 128, 0.15);
-    color: #4ade80;
-  }
-  .score-badge.mid {
-    background: rgba(251, 191, 36, 0.15);
-    color: #fbbf24;
-  }
-  .score-badge.low {
-    background: rgba(248, 113, 113, 0.15);
-    color: #f87171;
-  }
-  .source-link {
-    font-size: 0.8rem;
-    color: #818cf8;
-    text-decoration: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
 
   .action-btn {
     background: #4f46e5;
@@ -1737,290 +1328,6 @@
     cursor: pointer;
     padding: 0;
     text-align: left;
-  }
-
-  /* ── Result actions ─────────────────────────────── */
-  .result-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-  .copy-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 7px;
-    color: rgba(255, 255, 255, 0.55);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.78rem;
-    font-weight: 500;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    transition:
-      border-color 0.15s,
-      color 0.15s,
-      background 0.15s;
-  }
-  .copy-btn:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.85);
-    background: rgba(255, 255, 255, 0.08);
-  }
-  .sources-detail {
-    position: relative;
-  }
-  .sources-detail summary {
-    font-size: 0.78rem;
-    color: #818cf8;
-    cursor: pointer;
-    list-style: none;
-    transition: color 0.15s;
-  }
-  .sources-detail summary:hover {
-    color: #a5b4fc;
-  }
-  .sources-popup {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    z-index: 20;
-    background: #0f1520;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 0.875rem;
-    width: 260px;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-  }
-  .sources-popup-label {
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.25);
-    margin: 0 0 0.5rem;
-  }
-  .sources-popup ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-  .sources-popup a {
-    font-size: 0.78rem;
-    color: #818cf8;
-    text-decoration: none;
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .post-footer {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.2);
-  }
-
-  /* ── Prose ───────────────────────────────────────── */
-  .prose {
-    font-family: 'Lora', Georgia, serif;
-    font-size: 0.925rem;
-    line-height: 1.8;
-    color: rgba(255, 255, 255, 0.75);
-    white-space: normal;
-  }
-  .prose :global(h1),
-  .prose :global(h2),
-  .prose :global(h3),
-  .prose :global(h4) {
-    font-family: 'DM Sans', 'Inter', sans-serif;
-    color: #f1f5f9;
-    line-height: 1.25;
-    margin: 1.75em 0 0.5em;
-  }
-  .prose :global(h1) {
-    font-size: 1.5rem;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-  }
-  .prose :global(h2) {
-    font-size: 1.2rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
-  .prose :global(h3) {
-    font-size: 1rem;
-    font-weight: 600;
-    letter-spacing: -0.015em;
-  }
-  .prose :global(h4) {
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-  .prose :global(p) {
-    margin: 0 0 1em;
-  }
-  .prose :global(p:last-child) {
-    margin-bottom: 0;
-  }
-  .prose :global(strong) {
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
-  }
-  .prose :global(em) {
-    font-style: italic;
-  }
-  .prose :global(ul),
-  .prose :global(ol) {
-    margin: 0.5em 0 1em;
-    padding-left: 1.5em;
-  }
-  .prose :global(li) {
-    margin-bottom: 0.35em;
-  }
-  .prose :global(li > p) {
-    margin: 0;
-  }
-  .prose :global(blockquote) {
-    border-left: 3px solid rgba(129, 140, 248, 0.4);
-    margin: 1em 0;
-    padding: 0.25em 0 0.25em 1em;
-    color: rgba(255, 255, 255, 0.5);
-    font-style: italic;
-  }
-  .prose :global(code) {
-    font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
-    font-size: 0.82em;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 4px;
-    padding: 0.1em 0.35em;
-    color: #a5b4fc;
-  }
-  .prose :global(pre) {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    padding: 1em 1.25em;
-    overflow-x: auto;
-    margin: 1em 0;
-  }
-  .prose :global(pre code) {
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: 0.85em;
-    color: rgba(255, 255, 255, 0.7);
-  }
-  .prose :global(hr) {
-    border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    margin: 2em 0;
-  }
-  .prose :global(a) {
-    color: #818cf8;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-  .prose :global(a:hover) {
-    color: #a5b4fc;
-  }
-
-  /* ── SEO ─────────────────────────────────────────── */
-  .seo-section {
-    margin-bottom: 1.25rem;
-  }
-  .seo-label {
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.25);
-    margin: 0 0 0.5rem;
-  }
-  .seo-count {
-    font-weight: 400;
-    text-transform: none;
-    letter-spacing: 0;
-  }
-  .seo-titles {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-  .seo-copy-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.75rem;
-    width: 100%;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 8px;
-    padding: 0.625rem 0.75rem;
-    cursor: pointer;
-    text-align: left;
-    color: rgba(255, 255, 255, 0.65);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.85rem;
-    transition:
-      border-color 0.15s,
-      background 0.15s;
-  }
-  .seo-copy-row:hover {
-    border-color: rgba(129, 140, 248, 0.3);
-    background: rgba(129, 140, 248, 0.04);
-    color: rgba(255, 255, 255, 0.85);
-  }
-  .seo-copy-row svg {
-    color: rgba(255, 255, 255, 0.25);
-    flex-shrink: 0;
-  }
-  .seo-copy-row:hover svg {
-    color: #818cf8;
-  }
-  .seo-desc {
-    font-size: 0.85rem;
-    line-height: 1.55;
-  }
-  .seo-two-col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
-  .seo-slug {
-    font-family: monospace;
-    font-size: 0.85rem;
-    color: #818cf8;
-  }
-  .seo-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
-  }
-  .tag-chip {
-    background: rgba(79, 70, 229, 0.12);
-    color: #818cf8;
-    border: none;
-    border-radius: 6px;
-    padding: 0.3rem 0.625rem;
-    font-family: monospace;
-    font-size: 0.78rem;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .tag-chip:hover {
-    background: rgba(79, 70, 229, 0.22);
   }
 
   /* ── Demo banner ─────────────────────────────────── */
@@ -2180,194 +1487,6 @@
     border-color: rgba(251, 191, 36, 0.4);
   }
 
-  /* ── Draft card ──────────────────────────────────── */
-  .draft-card {
-    padding: 0;
-    overflow: hidden;
-  }
-  .draft-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.875rem 1.25rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    flex-wrap: wrap;
-  }
-  .draft-card-header h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: #f8fafc;
-    letter-spacing: -0.02em;
-    margin: 0;
-  }
-  .live-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    font-size: 0.72rem;
-    font-weight: 500;
-    color: #4ade80;
-    background: rgba(74, 222, 128, 0.1);
-    border: 1px solid rgba(74, 222, 128, 0.2);
-    border-radius: 20px;
-    padding: 0.2rem 0.6rem;
-  }
-  .live-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #4ade80;
-    animation: livePulse 1.4s ease-in-out infinite;
-  }
-  @keyframes livePulse {
-    0%,
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0.4;
-      transform: scale(0.8);
-    }
-  }
-  .revision-badge {
-    font-size: 0.72rem;
-    font-weight: 500;
-    color: #fbbf24;
-    background: rgba(251, 191, 36, 0.1);
-    border: 1px solid rgba(251, 191, 36, 0.2);
-    border-radius: 20px;
-    padding: 0.2rem 0.6rem;
-  }
-  .draft-raw {
-    font-family: 'Lora', Georgia, 'Times New Roman', serif;
-    font-size: 0.9375rem;
-    line-height: 1.8;
-    color: rgba(255, 255, 255, 0.72);
-    white-space: pre-wrap;
-    margin: 0;
-    background: none;
-    border: none;
-    padding: 1.25rem 1.5rem;
-    overflow-x: auto;
-  }
-  .draft-body {
-    font-family: 'Lora', Georgia, 'Times New Roman', serif;
-    font-size: 0.9375rem;
-    line-height: 1.8;
-    color: rgba(255, 255, 255, 0.72);
-    white-space: pre-wrap;
-    padding: 1.25rem;
-    margin: 0;
-  }
-  .draft-empty {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    padding: 2rem 1.25rem;
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.25);
-  }
-  .pip-stream {
-    font-family: Georgia, serif;
-    font-size: 0.72rem;
-    line-height: 1.6;
-    color: rgba(255, 255, 255, 0.3);
-    white-space: pre-wrap;
-    margin: 0.375rem 0 0;
-    max-height: 120px;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 6;
-    line-clamp: 6;
-    -webkit-box-orient: vertical;
-  }
-  .pip-preview {
-    font-family: Georgia, serif;
-    font-size: 0.7rem;
-    line-height: 1.55;
-    color: rgba(255, 255, 255, 0.28);
-    white-space: pre-wrap;
-    margin: 0.3rem 0 0;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    line-clamp: 4;
-    -webkit-box-orient: vertical;
-  }
-
-  /* ── Rev tooltip ─────────────────────────────────── */
-  .rev-tooltip {
-    position: fixed;
-    z-index: 60;
-    transform: translate(-50%, calc(-100% - 10px));
-    max-width: 320px;
-    background: #131c30;
-    border: 1px solid rgba(251, 191, 36, 0.25);
-    border-radius: 10px;
-    padding: 0.625rem 0.75rem;
-    font-family: 'Inter', sans-serif;
-    box-shadow:
-      0 10px 32px rgba(0, 0, 0, 0.6),
-      0 0 0 1px rgba(251, 191, 36, 0.06);
-    pointer-events: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .rev-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: rgba(251, 191, 36, 0.25);
-  }
-  .rev-tooltip.flip {
-    transform: translate(-50%, 10px);
-  }
-  .rev-tooltip.flip::after {
-    top: auto;
-    bottom: 100%;
-    border-top-color: transparent;
-    border-bottom-color: rgba(251, 191, 36, 0.25);
-  }
-  .rev-tooltip-note {
-    font-size: 0.78rem;
-    line-height: 1.5;
-    color: rgba(255, 255, 255, 0.68);
-    margin: 0;
-  }
-  .rev-tooltip-approve {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    align-self: flex-start;
-    background: rgba(74, 222, 128, 0.1);
-    border: 1px solid rgba(74, 222, 128, 0.25);
-    border-radius: 6px;
-    color: #4ade80;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 0.25rem 0.625rem;
-    cursor: pointer;
-    transition:
-      background 0.12s,
-      border-color 0.12s;
-  }
-  .rev-tooltip-approve:hover {
-    background: rgba(74, 222, 128, 0.18);
-    border-color: rgba(74, 222, 128, 0.4);
-  }
-  .rev-tooltip-approved {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: #4ade80;
-  }
-
   /* ── Pause / resume ─────────────────────────────── */
   .pause-btn {
     display: flex;
@@ -2435,46 +1554,6 @@
   }
   .resume-pause-btn:hover {
     background: #4338ca;
-  }
-
-  :global(.rev-mark) {
-    background: rgba(251, 191, 36, 0.18);
-    border-bottom: 1.5px solid rgba(251, 191, 36, 0.5);
-    border-radius: 2px;
-    color: inherit;
-    padding: 0 1px;
-    cursor: pointer;
-  }
-  :global(.rev-mark:hover) {
-    background: rgba(251, 191, 36, 0.28);
-  }
-
-  .revision-notes {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 0.875rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-  .revision-notes-label {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.2);
-    margin: 0 0 0.25rem;
-  }
-  .revision-note-item {
-    display: flex;
-    gap: 0.5rem;
-    align-items: flex-start;
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.45);
-    line-height: 1.5;
-  }
-  .revision-note-bullet {
-    color: rgba(251, 191, 36, 0.5);
-    flex-shrink: 0;
   }
 
   /* ── Pipeline item ───────────────────────────────── */
