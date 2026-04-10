@@ -1,63 +1,10 @@
 import { type RequestHandler } from '@sveltejs/kit'
-import { jwtVerify } from 'jose'
-import { env as privateEnv } from '$env/dynamic/private'
-import { z } from 'zod'
-import type { Source, SeoMeta } from '$lib/agents/types.js'
+import { SavePostSchema, type PostListItem, type SavedPost } from '$lib/schemas/posts'
 
-export type PostListItem = {
-  id: string
-  savedAt: string
-  topic: string
-  seoTitle: string
-  format: string
-  wordCount: string
-}
+export type { PostListItem, SavedPost }
 
-export type SavedPost = PostListItem & {
-  tone: string
-  post: string
-  sources: Source[]
-  seoMeta?: SeoMeta | null
-}
-
-const SavePostSchema = z.object({
-  runId: z.string().uuid(),
-  topic: z.string(),
-  format: z.string(),
-  tone: z.string(),
-  wordCount: z.string(),
-  post: z.string(),
-  sources: z.array(z.object({ url: z.string(), title: z.string(), content: z.string() })),
-  seoMeta: z
-    .object({
-      titles: z.array(z.string()),
-      metaDescription: z.string(),
-      tags: z.array(z.string()),
-      slug: z.string()
-    })
-    .nullable()
-    .optional()
-})
-
-function getSecret() {
-  const secret = privateEnv.JWT_SECRET
-  if (!secret) throw new Error('Missing env var JWT_SECRET')
-  return new TextEncoder().encode(secret)
-}
-
-async function requireAuth(cookies: Parameters<RequestHandler>[0]['cookies']): Promise<boolean> {
-  const token = cookies.get('auth_token')
-  if (!token) return false
-  try {
-    await jwtVerify(token, getSecret())
-    return true
-  } catch {
-    return false
-  }
-}
-
-export const GET: RequestHandler = async ({ cookies, url, platform }) => {
-  if (!(await requireAuth(cookies))) {
+export const GET: RequestHandler = async ({ locals, url, platform }) => {
+  if (!locals.user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401
     })
@@ -113,8 +60,8 @@ export const GET: RequestHandler = async ({ cookies, url, platform }) => {
   })
 }
 
-export const POST: RequestHandler = async ({ cookies, request, platform }) => {
-  if (!(await requireAuth(cookies))) {
+export const POST: RequestHandler = async ({ locals, request, platform }) => {
+  if (!locals.user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401
     })
@@ -159,8 +106,8 @@ export const POST: RequestHandler = async ({ cookies, request, platform }) => {
   })
 }
 
-export const DELETE: RequestHandler = async ({ cookies, url, platform }) => {
-  if (!(await requireAuth(cookies))) {
+export const DELETE: RequestHandler = async ({ locals, url, platform }) => {
+  if (!locals.user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401
     })

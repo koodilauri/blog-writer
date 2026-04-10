@@ -1,28 +1,9 @@
 import { type RequestHandler } from '@sveltejs/kit'
-import { jwtVerify } from 'jose'
-import { env as privateEnv } from '$env/dynamic/private'
 
 const SESSION_KEY = 'session/current.json'
 
-function getSecret() {
-  const secret = privateEnv.JWT_SECRET
-  if (!secret) throw new Error('Missing env var JWT_SECRET')
-  return new TextEncoder().encode(secret)
-}
-
-async function requireAuth(cookies: Parameters<RequestHandler>[0]['cookies']): Promise<boolean> {
-  const token = cookies.get('auth_token')
-  if (!token) return false
-  try {
-    await jwtVerify(token, getSecret())
-    return true
-  } catch {
-    return false
-  }
-}
-
-export const GET: RequestHandler = async ({ cookies, platform }) => {
-  if (!(await requireAuth(cookies))) {
+export const GET: RequestHandler = async ({ locals, platform }) => {
+  if (!locals.user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401
     })
@@ -46,8 +27,8 @@ export const GET: RequestHandler = async ({ cookies, platform }) => {
   })
 }
 
-export const PUT: RequestHandler = async ({ cookies, request, platform }) => {
-  if (!(await requireAuth(cookies))) {
+export const PUT: RequestHandler = async ({ locals, request, platform }) => {
+  if (!locals.user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401
     })
@@ -65,8 +46,8 @@ export const PUT: RequestHandler = async ({ cookies, request, platform }) => {
   return new Response(null, { status: 204 })
 }
 
-export const DELETE: RequestHandler = async ({ cookies, platform }) => {
-  if (!(await requireAuth(cookies))) {
+export const DELETE: RequestHandler = async ({ locals, platform }) => {
+  if (!locals.user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401
     })
