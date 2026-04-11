@@ -9,33 +9,35 @@
   let { url, title, score, checked, ontoggle }: Props = $props()
 </script>
 
-<li class="source-item">
-  <input type="checkbox" {checked} onchange={ontoggle} class="source-check" />
-  <span class="score-badge" class:high={score >= 4} class:mid={score === 3} class:low={score < 3}
-    >{score}/5</span
+<li class="flex items-center gap-2.5">
+  <input
+    type="checkbox"
+    {checked}
+    onchange={ontoggle}
+    class="accent-brand-600 size-[15px] shrink-0 cursor-pointer"
+  />
+  <span
+    class="score-badge shrink-0"
+    class:high={score >= 4}
+    class:mid={score === 3}
+    class:low={score < 3}>{score}/5</span
   >
-  <a href={url} target="_blank" rel="noopener noreferrer" class="source-link">{title || url}</a>
+  <a
+    href={url}
+    target="_blank"
+    rel="noopener noreferrer"
+    class="text-brand-400 min-w-0 overflow-hidden text-[0.8rem] text-ellipsis whitespace-nowrap no-underline"
+    >{title || url}</a
+  >
 </li>
 
 <style>
-  .source-item {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-  }
-  .source-check {
-    width: 15px;
-    height: 15px;
-    flex-shrink: 0;
-    cursor: pointer;
-    accent-color: #4f46e5;
-  }
+  /* Color-coded score badges — kept as scoped CSS (3 distinct color states) */
   .score-badge {
     font-size: 0.68rem;
     font-weight: 700;
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
-    flex-shrink: 0;
   }
   .score-badge.high {
     background: rgba(74, 222, 128, 0.15);
@@ -48,14 +50,5 @@
   .score-badge.low {
     background: rgba(248, 113, 113, 0.15);
     color: #f87171;
-  }
-  .source-link {
-    font-size: 0.8rem;
-    color: #818cf8;
-    text-decoration: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
   }
 </style>

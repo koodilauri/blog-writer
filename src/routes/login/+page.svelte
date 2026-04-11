@@ -3,6 +3,7 @@
   import { setAuth } from '$lib/auth'
   import { onMount } from 'svelte'
   import { LoginResponseSchema } from '$lib/schemas/login'
+  import { Button } from '$lib/components/ui/button'
 
   let email = ''
   let password = ''
@@ -69,29 +70,35 @@
     </div>
 
     <h1>Login or try the demo</h1>
-    <p class="sub">Sign in to continue writing.</p>
+    <p class="mt-0 mb-8 text-[0.9rem] text-white/30">Sign in to continue writing.</p>
 
-    <form onsubmit={onSubmit}>
-      <div class="field">
-        <label for="email">Email</label>
+    <form class="flex flex-col gap-4" onsubmit={onSubmit}>
+      <div class="flex flex-col gap-[0.4rem]">
+        <label for="email" class="text-[0.8rem] font-medium tracking-[0.01em] text-white/45">
+          Email
+        </label>
         <input
           id="email"
           bind:value={email}
           type="email"
+          class="input-dark"
           placeholder="you@company.com"
           autocomplete="email"
           required
         />
       </div>
 
-      <div class="field">
-        <div class="label-row">
-          <label for="password">Password</label>
+      <div class="flex flex-col gap-[0.4rem]">
+        <div class="flex items-center justify-between">
+          <label for="password" class="text-[0.8rem] font-medium tracking-[0.01em] text-white/45">
+            Password
+          </label>
         </div>
         <input
           id="password"
           bind:value={password}
-          type="password"
+          type="input"
+          class="input-dark"
           placeholder="Enter your password"
           autocomplete="current-password"
           required
@@ -111,21 +118,21 @@
         </div>
       {/if}
 
-      <button type="submit" disabled={loading}>
+      <Button type="submit" disabled={loading} class="mt-1 h-11 w-full text-[0.9rem]">
         {#if loading}
           <span class="spin"></span>
           Signing in…
         {:else}
           Sign in
         {/if}
-      </button>
+      </Button>
     </form>
 
     <div class="demo-divider">
       <span>or</span>
     </div>
 
-    <button type="button" class="demo-btn" onclick={() => goto('/generate?demo')}>
+    <Button variant="outline" class="h-[2.8rem] w-full" onclick={() => void goto('/generate?demo')}>
       <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
         <path
           fill-rule="evenodd"
@@ -134,13 +141,11 @@
         />
       </svg>
       Try the demo
-    </button>
+    </Button>
   </main>
 </div>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
   :global(body) {
     margin: 0;
   }
@@ -292,64 +297,6 @@
     line-height: 1.1;
   }
 
-  .sub {
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.3);
-    margin: 0 0 2rem;
-  }
-
-  form {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .label-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  label {
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.45);
-    letter-spacing: 0.01em;
-  }
-
-  input {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    color: #f1f5f9;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.9rem;
-    padding: 0.7rem 0.875rem;
-    outline: none;
-    transition:
-      border-color 0.2s,
-      box-shadow 0.2s,
-      background 0.2s;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  input::placeholder {
-    color: rgba(255, 255, 255, 0.12);
-  }
-
-  input:focus {
-    border-color: rgba(129, 140, 248, 0.5);
-    background: rgba(129, 140, 248, 0.06);
-    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.08);
-  }
-
   .error-msg {
     display: flex;
     align-items: center;
@@ -362,49 +309,11 @@
     padding: 0.55rem 0.75rem;
   }
 
-  button[type='submit'] {
-    background: #4f46e5;
-    border: none;
-    border-radius: 10px;
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 600;
-    padding: 0.75rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    transition:
-      background 0.2s,
-      transform 0.15s,
-      box-shadow 0.2s;
-    margin-top: 0.25rem;
-    letter-spacing: -0.01em;
-  }
-
-  button[type='submit']:hover {
-    background: #4338ca;
-    box-shadow: 0 4px 20px rgba(79, 70, 229, 0.35);
-    transform: translateY(-1px);
-  }
-
-  button[type='submit']:active {
-    transform: translateY(0);
-  }
-  button[type='submit']:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-
   .demo-divider {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-top: 0.25rem;
+    margin: 0.75rem 0;
   }
   .demo-divider::before,
   .demo-divider::after {
@@ -416,47 +325,5 @@
   .demo-divider span {
     font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.2);
-  }
-
-  .demo-btn {
-    width: 100%;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    color: rgba(255, 255, 255, 0.55);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 500;
-    padding: 0.7rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    transition:
-      border-color 0.2s,
-      color 0.2s,
-      background 0.2s;
-  }
-  .demo-btn:hover {
-    border-color: rgba(129, 140, 248, 0.4);
-    color: rgba(255, 255, 255, 0.85);
-    background: rgba(99, 102, 241, 0.06);
-  }
-
-  .spin {
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(255, 255, 255, 0.25);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    flex-shrink: 0;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

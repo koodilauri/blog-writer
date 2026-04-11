@@ -58,6 +58,29 @@
 }
 
 @layer base {
+  :root {
+    --background: 8 12 20;
+    --foreground: 241 245 249;
+    --card: 30 41 59;
+    --card-foreground: 241 245 249;
+    --popover: 15 21 35;
+    --popover-foreground: 241 245 249;
+    --primary: 99 102 241;
+    --primary-foreground: 255 255 255;
+    --secondary: 17 24 39;
+    --secondary-foreground: 148 163 184;
+    --muted: 17 24 39;
+    --muted-foreground: 71 85 105;
+    --accent: 99 102 241;
+    --accent-foreground: 255 255 255;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+    --border: 51 65 85;
+    --input: 30 42 58;
+    --ring: 99 102 241;
+    --radius: 0.625rem;
+  }
+
   html {
     background-color: #080c14;
     color: var(--color-text-primary);
@@ -88,5 +111,133 @@
   }
   *::-webkit-scrollbar-thumb:hover {
     background: rgba(129, 140, 248, 0.38);
+  }
+}
+
+/* ── Shared component utilities ─────────────────────────────────────────── */
+@layer components {
+  /* Card surface — shared by SeoPanel, DraftViewer, OutlineApproval, etc. */
+  .card-surface {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 14px;
+    padding: 1.5rem;
+  }
+
+  /* Uppercase label used above lists/sections */
+  .section-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.25);
+    margin: 0 0 0.5rem;
+  }
+
+  /* Dark-themed text input / textarea */
+  .input-dark {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    padding: 0.7rem 0.875rem;
+    outline: none;
+    resize: vertical;
+    transition:
+      border-color 0.2s,
+      box-shadow 0.2s,
+      background 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .input-dark::placeholder {
+    color: rgba(255, 255, 255, 0.2);
+  }
+  .input-dark:focus {
+    border-color: rgba(129, 140, 248, 0.5);
+    background: rgba(129, 140, 248, 0.06);
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.08);
+  }
+
+  /* Global spinner (used across multiple pages/components) */
+  .spin {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(129, 140, 248, 0.25);
+    border-top-color: #818cf8;
+    border-radius: 50%;
+    animation: layoutSpin 0.75s linear infinite;
+    flex-shrink: 0;
+  }
+  .spin-sm {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border: 1.5px solid rgba(129, 140, 248, 0.2);
+    border-top-color: #818cf8;
+    border-radius: 50%;
+    animation: layoutSpin 0.75s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes layoutSpin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Live pulse dot animation (pipeline status, draft live badge) */
+  @keyframes livePulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.65);
+    }
+  }
+
+  /* Pipeline dot spin animation */
+  @keyframes pipSpin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* SEO copy-row button — shared by SeoPanel */
+  .seo-copy-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    background: rgba(255 255 255 / 0.03);
+    border: 1px solid rgba(255 255 255 / 0.07);
+    border-radius: 8px;
+    padding: 0.625rem 0.75rem;
+    cursor: pointer;
+    text-align: left;
+    color: rgba(255 255 255 / 0.65);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
+  }
+  .seo-copy-row:hover {
+    border-color: rgba(129 140 248 / 0.3);
+    background: rgba(129 140 248 / 0.04);
+    color: rgba(255 255 255 / 0.85);
+  }
+  .seo-copy-row svg {
+    color: rgba(255 255 255 / 0.25);
+    flex-shrink: 0;
+  }
+  .seo-copy-row:hover svg {
+    color: var(--color-brand-400);
   }
 }

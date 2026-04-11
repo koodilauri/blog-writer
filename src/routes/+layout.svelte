@@ -46,7 +46,8 @@
   import { page } from '$app/state'
   import './layout.css'
   import favicon from '$lib/assets/favicon.svg'
-  import { Dialog } from 'bits-ui'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { Button } from '$lib/components/ui/button'
   import { DEMO_HISTORY_ITEMS } from '$lib/demo-script'
   import AppHeader from '$lib/components/AppHeader.svelte'
   import HistorySidebar from '$lib/components/HistorySidebar.svelte'
@@ -234,7 +235,10 @@
         collapsed={historyCollapsed}
         open={historyOpen}
         {isDemo}
-        onclose={() => (historyOpen = false)}
+        onclose={() => {
+          historyOpen = false
+          historyCollapsed = true
+        }}
         onnavigate={id => goto(`/preview/${id}${isDemo ? '?demo' : ''}`)}
         ondelete={promptDeletePost}
       />
@@ -270,28 +274,27 @@
       if (!v) postToDeleteId = null
     }}
   >
-    <Dialog.Portal>
-      <Dialog.Overlay class="dialog-overlay" />
-      <Dialog.Content class="dialog-content" aria-describedby="del-desc">
-        <div class="dialog-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fill-rule="evenodd"
-              d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
-              clip-rule="evenodd"
-            />
-          </svg>
-        </div>
-        <Dialog.Title class="dialog-title">Delete post?</Dialog.Title>
-        <p id="del-desc" class="dialog-desc">
-          This will permanently remove the post from your history and cannot be undone.
-        </p>
-        <div class="dialog-actions">
-          <Dialog.Close class="dialog-cancel">Cancel</Dialog.Close>
-          <button class="dialog-confirm" onclick={confirmDeletePost}>Delete</button>
-        </div>
-      </Dialog.Content>
-    </Dialog.Portal>
+    <Dialog.Content aria-describedby="del-desc">
+      <div
+        class="text-error mb-4 flex size-10 items-center justify-center rounded-[10px] border border-[rgba(239,68,68,0.18)] bg-[rgba(239,68,68,0.1)]"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path
+            fill-rule="evenodd"
+            d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
+            clip-rule="evenodd"
+          />
+        </svg>
+      </div>
+      <Dialog.Title>Delete post?</Dialog.Title>
+      <p id="del-desc" class="mt-1.5 mb-5 text-[0.83rem] leading-[1.55] text-white/40">
+        This will permanently remove the post from your history and cannot be undone.
+      </p>
+      <div class="flex justify-end gap-2.5">
+        <Button variant="secondary" onclick={() => (postToDeleteId = null)}>Cancel</Button>
+        <Button variant="destructive" onclick={confirmDeletePost}>Delete</Button>
+      </div>
+    </Dialog.Content>
   </Dialog.Root>
 {/if}
 
@@ -413,127 +416,6 @@
     border: none;
     padding: 0;
     display: block;
-  }
-
-  /* ── Global spinners (used by child pages) ─────────────────────────── */
-  :global(.spin) {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(129, 140, 248, 0.25);
-    border-top-color: #818cf8;
-    border-radius: 50%;
-    animation: layoutSpin 0.75s linear infinite;
-  }
-  :global(.spin-sm) {
-    display: inline-block;
-    width: 11px;
-    height: 11px;
-    border: 1.5px solid rgba(129, 140, 248, 0.2);
-    border-top-color: #818cf8;
-    border-radius: 50%;
-    animation: layoutSpin 0.75s linear infinite;
-  }
-  @keyframes layoutSpin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* ── Delete dialog (bits-ui, global because inside Portal) ────────── */
-  :global(.dialog-overlay) {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(4px);
-    z-index: 100;
-    animation: dlgFadeIn 0.14s ease;
-  }
-  :global(.dialog-content) {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 101;
-    background: #1a2235;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
-    padding: 1.5rem;
-    width: min(420px, calc(100vw - 2rem));
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
-    animation: dlgScaleIn 0.14s ease;
-  }
-  @keyframes dlgFadeIn {
-    from {
-      opacity: 0;
-    }
-  }
-  @keyframes dlgScaleIn {
-    from {
-      opacity: 0;
-      transform: translate(-50%, -50%) scale(0.94);
-    }
-  }
-  .dialog-icon {
-    width: 40px;
-    height: 40px;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.18);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #f87171;
-    margin-bottom: 1rem;
-  }
-  :global(.dialog-title) {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #f1f5f9;
-    margin: 0 0 0.5rem;
-  }
-  .dialog-desc {
-    font-size: 0.83rem;
-    color: #475569;
-    margin: 0 0 1.25rem;
-    line-height: 1.55;
-  }
-  .dialog-actions {
-    display: flex;
-    gap: 0.625rem;
-    justify-content: flex-end;
-  }
-  :global(.dialog-cancel) {
-    padding: 0.42rem 0.9rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 7px;
-    color: #64748b;
-    font-size: 0.83rem;
-    font-family: inherit;
-    cursor: pointer;
-    transition:
-      background 0.15s,
-      color 0.15s;
-  }
-  :global(.dialog-cancel):hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #94a3b8;
-  }
-  .dialog-confirm {
-    padding: 0.42rem 0.9rem;
-    background: rgba(239, 68, 68, 0.14);
-    border: 1px solid rgba(239, 68, 68, 0.28);
-    border-radius: 7px;
-    color: #fca5a5;
-    font-size: 0.83rem;
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .dialog-confirm:hover {
-    background: rgba(239, 68, 68, 0.24);
   }
 
   /* ── Responsive ────────────────────────────────────────────────────── */

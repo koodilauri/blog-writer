@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from '$lib/components/ui/button'
+
   type Props = {
     userEmail: string
     isDemo: boolean
@@ -9,12 +11,19 @@
   }
   let { userEmail, isDemo, historyCollapsed, ontogglemobile, ontogglesidebar, onlogout }: Props =
     $props()
+
+  const homeHref = $derived(`/generate${isDemo ? '?demo' : ''}`)
 </script>
 
-<header>
-  <div class="hd-left">
-    <button
-      class="sidebar-toggle mobile-toggle"
+<header
+  class="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-white/6 bg-[rgba(8,12,20,0.88)] px-5 backdrop-blur-md"
+  style="height:52px"
+>
+  <div class="flex min-w-0 items-center gap-2.5">
+    <Button
+      variant="ghost"
+      size="icon"
+      class="flex sm:hidden"
       onclick={ontogglemobile}
       aria-label="Toggle history"
     >
@@ -25,9 +34,11 @@
           clip-rule="evenodd"
         />
       </svg>
-    </button>
-    <button
-      class="sidebar-toggle desktop-toggle"
+    </Button>
+    <Button
+      variant="ghost"
+      size="icon"
+      class="hidden sm:flex"
       onclick={ontogglesidebar}
       aria-label={historyCollapsed ? 'Expand history' : 'Collapse history'}
       title={historyCollapsed ? 'Show history' : 'Hide history'}
@@ -39,10 +50,12 @@
           clip-rule="evenodd"
         />
       </svg>
-    </button>
+    </Button>
 
-    <a href="/generate{isDemo ? '?demo' : ''}" class="logo" aria-label="BlogWriter home">
-      <div class="logo-icon">
+    <a href={homeHref} class="logo" aria-label="BlogWriter home">
+      <div
+        class="border-brand-400/25 flex size-8 shrink-0 items-center justify-center rounded-lg border bg-linear-to-br from-[rgba(99,102,241,0.2)] to-[rgba(129,140,248,0.1)]"
+      >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
           <path
             d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
@@ -72,83 +85,36 @@
           </defs>
         </svg>
       </div>
-      <div class="logo-text">
+      <div class="flex flex-col gap-px">
         <span class="logo-name">BlogWriter</span>
-        <span class="logo-tag">AI-powered</span>
+        <span
+          class="text-text-muted text-[0.6rem] leading-none font-medium tracking-[0.05em] uppercase"
+          >AI-powered</span
+        >
       </div>
     </a>
   </div>
 
-  <div class="hd-right">
-    <a href="/generate{isDemo ? '?demo' : ''}" class="new-post-btn" title="Start a new post">
+  <div class="flex shrink-0 items-center gap-2.5">
+    <Button href={homeHref} size="sm" class="gap-[0.35rem]" title="Start a new post">
       <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
         <path
           d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
         />
       </svg>
       New Post
-    </a>
+    </Button>
     {#if userEmail}
-      <span class="user-email">{userEmail}</span>
+      <span
+        class="text-text-muted max-w-[160px] overflow-hidden text-[0.78rem] text-ellipsis whitespace-nowrap"
+        >{userEmail}</span
+      >
     {/if}
-    <button class="logout-btn" onclick={onlogout}>Sign out</button>
+    <Button variant="ghost" size="sm" onclick={onlogout}>Sign out</Button>
   </div>
 </header>
 
 <style>
-  header {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 1.25rem;
-    height: 52px;
-    background: rgba(8, 12, 20, 0.88);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    gap: 0.5rem;
-  }
-  .hd-left {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    min-width: 0;
-  }
-  .hd-right {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    flex-shrink: 0;
-  }
-  .sidebar-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
-    color: #94a3b8;
-    cursor: pointer;
-    transition:
-      background 0.15s,
-      color 0.15s;
-    flex-shrink: 0;
-    padding: 0;
-  }
-  .sidebar-toggle:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: #f1f5f9;
-  }
-  .mobile-toggle {
-    display: none;
-  }
-  .desktop-toggle {
-    display: flex;
-  }
   .logo {
     display: flex;
     align-items: center;
@@ -156,22 +122,8 @@
     text-decoration: none;
     flex-shrink: 0;
   }
-  .logo-icon {
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(129, 140, 248, 0.1) 100%);
-    border: 1px solid rgba(129, 140, 248, 0.25);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .logo-text {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
+
+  /* Gradient text — requires -webkit-background-clip */
   .logo-name {
     font-size: 0.9rem;
     font-weight: 700;
@@ -181,69 +133,5 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     line-height: 1.1;
-  }
-  .logo-tag {
-    font-size: 0.6rem;
-    color: #475569;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    font-weight: 500;
-    line-height: 1;
-  }
-  .new-post-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.32rem 0.7rem;
-    background: #6366f1;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    color: #fff;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    transition:
-      background 0.15s,
-      transform 0.1s;
-    white-space: nowrap;
-  }
-  .new-post-btn:hover {
-    background: #818cf8;
-    transform: translateY(-1px);
-  }
-  .user-email {
-    font-size: 0.78rem;
-    color: #475569;
-    max-width: 160px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .logout-btn {
-    padding: 0.3rem 0.65rem;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 6px;
-    color: #475569;
-    font-size: 0.76rem;
-    font-family: inherit;
-    cursor: pointer;
-    transition:
-      border-color 0.15s,
-      color 0.15s;
-    white-space: nowrap;
-  }
-  .logout-btn:hover {
-    border-color: rgba(255, 255, 255, 0.18);
-    color: #94a3b8;
-  }
-  @media (max-width: 640px) {
-    .mobile-toggle {
-      display: flex;
-    }
-    .desktop-toggle {
-      display: none;
-    }
   }
 </style>
