@@ -1,5 +1,5 @@
 import { type RequestHandler } from '@sveltejs/kit'
-import { SavePostSchema, type PostListItem, type SavedPost } from '$lib/schemas/posts'
+import { PostIdSchema, SavePostSchema, type PostListItem, type SavedPost } from '$lib/schemas/posts'
 
 export type { PostListItem, SavedPost }
 
@@ -11,9 +11,14 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
   }
 
   const bucket = platform?.env?.R2
-  const id = url.searchParams.get('id')
+  const rawId = url.searchParams.get('id')
 
-  if (id) {
+  if (rawId !== null) {
+    const idResult = PostIdSchema.safeParse(rawId)
+    if (!idResult.success) {
+      return new Response(JSON.stringify({ error: 'Invalid id' }), { status: 400 })
+    }
+    const id = idResult.data
     // Fetch a single full post
     if (!bucket)
       return new Response(JSON.stringify({ error: 'Not found' }), {
@@ -113,12 +118,11 @@ export const DELETE: RequestHandler = async ({ locals, url, platform }) => {
     })
   }
 
-  const id = url.searchParams.get('id')
-  if (!id) {
-    return new Response(JSON.stringify({ error: 'Missing id' }), {
-      status: 400
-    })
+  const idResult = PostIdSchema.safeParse(url.searchParams.get('id'))
+  if (!idResult.success) {
+    return new Response(JSON.stringify({ error: 'Invalid id' }), { status: 400 })
   }
+  const id = idResult.data
 
   const bucket = platform?.env?.R2
   if (bucket) {

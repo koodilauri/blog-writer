@@ -3,6 +3,7 @@ import { jwtVerify } from 'jose'
 import { env as privateEnv } from '$env/dynamic/private'
 import { randomUUID } from 'crypto'
 import { logger } from '$lib/logger.js'
+import { z } from 'zod'
 
 function getSecret() {
   const secret = privateEnv.JWT_SECRET
@@ -31,7 +32,11 @@ export const GET: RequestHandler = async ({ request, platform, cookies, url }) =
     return new Response('Expected websocket upgrade', { status: 426 })
   }
 
-  const runId = url.searchParams.get('runId') ?? randomUUID()
+  const rawRunId = url.searchParams.get('runId')
+  if (rawRunId !== null && !z.string().uuid().safeParse(rawRunId).success) {
+    return new Response('Invalid runId', { status: 400 })
+  }
+  const runId = rawRunId ?? randomUUID()
   logger.info({ runId }, 'pipeline websocket connecting')
 
   const doNamespace = platform?.env?.PIPELINE_DO

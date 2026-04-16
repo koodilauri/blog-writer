@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit'
 import { SignJWT } from 'jose'
 import { env as privateEnv } from '$env/dynamic/private'
+import { LoginRequestSchema } from '$lib/schemas/login'
 
 function getSecret() {
   const secret = privateEnv.JWT_SECRET
@@ -41,11 +42,9 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
 }
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
-  const { email, password } = await readCredentials(request)
-
-  if (typeof email !== 'string' || typeof password !== 'string') {
-    return json({ error: 'Invalid payload' }, { status: 400 })
-  }
+  const parsed = LoginRequestSchema.safeParse(await readCredentials(request))
+  if (!parsed.success) return json({ error: 'Invalid payload' }, { status: 400 })
+  const { email, password } = parsed.data
 
   const loginEmail = privateEnv.LOGIN_EMAIL
   const loginPassword = privateEnv.LOGIN_PASSWORD

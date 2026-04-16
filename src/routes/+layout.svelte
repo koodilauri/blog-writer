@@ -49,6 +49,7 @@
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
   import { DEMO_HISTORY_ITEMS } from '$lib/demo-script'
+  import { PostListSchema } from '$lib/schemas/posts'
   import AppHeader from '$lib/components/AppHeader.svelte'
   import HistorySidebar from '$lib/components/HistorySidebar.svelte'
   import PipelinePanel from '$lib/components/PipelinePanel.svelte'
@@ -165,7 +166,7 @@
   async function loadHistory() {
     loadingHistory = true
     const res = await fetch('/api/posts')
-    if (res.ok) historyItems = await res.json()
+    if (res.ok) historyItems = PostListSchema.parse(await res.json())
     loadingHistory = false
   }
 

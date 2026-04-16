@@ -12,6 +12,8 @@
   import SeoPanel from '$lib/components/SeoPanel.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Textarea } from '$lib/components/ui/textarea'
+  import { SessionSchema } from '$lib/schemas/session'
+  import { StageEventSchema, ErrorResponseSchema } from '$lib/schemas/events'
 
   function renderMd(text: string): string {
     return marked.parse(text, { async: false }) as string
@@ -212,8 +214,9 @@
     // Fallback: check saved session (e.g. page refresh mid-stream)
     const sessRes = await fetch('/api/session')
     if (sessRes.ok) {
-      const data = (await sessRes.json()) as Record<string, unknown> | null
-      if (data && typeof data.runId === 'string' && data.runId === postId && !data.finalPost) {
+      const sessionResult = SessionSchema.nullable().safeParse(await sessRes.json())
+      const data = sessionResult.success ? sessionResult.data : null
+      if (data && data.runId === postId && !data.finalPost) {
         savedSession = data
         await resumeSavedSession()
         return
@@ -238,7 +241,8 @@
       )
       ;(socket as EventTarget).addEventListener('message', (e: Event) => {
         try {
-          handleEvent(JSON.parse((e as MessageEvent).data) as StageEvent)
+          const parsed = StageEventSchema.safeParse(JSON.parse((e as MessageEvent).data))
+          if (parsed.success) handleEvent(parsed.data as unknown as StageEvent)
         } catch {
           /* ignore malformed message */
         }
@@ -273,8 +277,9 @@
           return
         }
         try {
-          const d = (await res.json()) as { error?: string }
-          errorMsg = d.error ?? `Request failed (${res.status})`
+          const result = ErrorResponseSchema.safeParse(await res.json())
+          errorMsg =
+            (result.success ? result.data.error : undefined) ?? `Request failed (${res.status})`
         } catch {
           errorMsg = `Request failed (${res.status})`
         }
@@ -519,7 +524,8 @@
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           try {
-            handleEvent(JSON.parse(line.slice(6)) as StageEvent)
+            const parsed = StageEventSchema.safeParse(JSON.parse(line.slice(6)))
+            if (parsed.success) handleEvent(parsed.data as unknown as StageEvent)
           } catch {
             /* ignore malformed SSE */
           }

@@ -1,4 +1,5 @@
 import { type RequestHandler } from '@sveltejs/kit'
+import { SessionSchema } from '$lib/schemas/session'
 
 const SESSION_KEY = 'session/current.json'
 
@@ -34,7 +35,18 @@ export const PUT: RequestHandler = async ({ locals, request, platform }) => {
     })
   }
 
-  const body = await request.text()
+  const raw = await request.text()
+  let jsonParsed: unknown
+  try {
+    jsonParsed = JSON.parse(raw)
+  } catch {
+    return new Response('Invalid JSON', { status: 400 })
+  }
+  const result = SessionSchema.safeParse(jsonParsed)
+  if (!result.success) {
+    return new Response('Invalid session payload', { status: 400 })
+  }
+  const body = JSON.stringify(result.data)
 
   const bucket = platform?.env?.R2
   if (bucket) {

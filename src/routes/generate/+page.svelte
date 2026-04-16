@@ -5,6 +5,7 @@
   import { Button } from '$lib/components/ui/button'
   import { Textarea } from '$lib/components/ui/textarea'
   import { Select, SelectTrigger, SelectContent, SelectItem } from '$lib/components/ui/select'
+  import { SessionSchema } from '$lib/schemas/session'
 
   const FORMAT_OPTIONS = ['blog post', 'essay', 'tutorial', 'story', 'scientific abstract']
   const TONE_OPTIONS = [
@@ -35,10 +36,11 @@
     if (!isDemo) {
       const res = await fetch('/api/session')
       if (res.ok) {
-        const data = (await res.json()) as Record<string, unknown> | null
-        if (data && typeof data.runId === 'string' && !data.finalPost) {
+        const result = SessionSchema.nullable().safeParse(await res.json())
+        const data = result.success ? result.data : null
+        if (data && !data.finalPost) {
           resumeRunId = data.runId
-          resumeTopic = typeof data.topic === 'string' ? data.topic : ''
+          resumeTopic = data.topic ?? ''
         }
       }
     }
