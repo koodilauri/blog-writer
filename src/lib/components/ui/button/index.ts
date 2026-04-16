@@ -7,22 +7,20 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-[#6366f1] text-white shadow-sm hover:bg-[#5558e8] active:bg-[#4f52e0]',
-        destructive:
-          'bg-[rgba(239,68,68,0.12)] text-[#f87171] border border-[rgba(239,68,68,0.25)] hover:bg-[rgba(239,68,68,0.2)]',
+        default: 'bg-brand-500 text-white shadow-sm hover:bg-brand-500/90 active:bg-brand-600',
+        destructive: 'border border-error/25 bg-error/12 text-error hover:bg-error/20',
         outline:
-          'border border-[rgba(255,255,255,0.12)] bg-transparent text-[rgba(255,255,255,0.7)] hover:border-[rgba(255,255,255,0.22)] hover:bg-[rgba(255,255,255,0.05)] hover:text-white',
-        secondary:
-          'bg-[rgba(255,255,255,0.05)] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.09)] hover:text-white',
-        ghost: 'text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.07)] hover:text-white',
-        link: 'text-[#818cf8] underline-offset-4 hover:underline',
+          'border border-white/12 bg-transparent text-white/70 hover:border-white/22 hover:bg-white/5 hover:text-white',
+        secondary: 'bg-white/5 text-white/70 hover:bg-white/9 hover:text-white',
+        ghost: 'text-white/55 hover:bg-white/7 hover:text-white',
+        link: 'text-brand-400 underline-offset-4 hover:underline',
         // Custom variants
         approve:
-          'bg-[rgba(34,197,94,0.10)] text-[#4ade80] border border-[rgba(34,197,94,0.25)] hover:bg-[rgba(34,197,94,0.18)] hover:text-[#86efac]',
+          'border border-success/25 bg-success/10 text-[#4ade80] hover:bg-success/18 hover:text-[#86efac]',
         'ghost-brand':
-          'border border-[rgba(99,102,241,0.35)] text-[#a5b4fc] bg-transparent hover:bg-[rgba(99,102,241,0.12)] hover:border-[rgba(99,102,241,0.55)]',
+          'border border-brand-500/35 bg-transparent text-[#a5b4fc] hover:bg-brand-500/12 hover:border-brand-500/55',
         warning:
-          'bg-[rgba(245,158,11,0.12)] text-[#d97706] border border-[rgba(245,158,11,0.25)] hover:bg-[rgba(245,158,11,0.2)] hover:text-[#f59e0b]'
+          'border border-warning/25 bg-warning/12 text-[#d97706] hover:bg-warning/20 hover:text-warning'
       },
       size: {
         default: 'h-9 px-4 py-2',

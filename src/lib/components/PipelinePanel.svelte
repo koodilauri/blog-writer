@@ -54,9 +54,11 @@
     aria-label="Show pipeline panel"
   >
     {#if pipeline.running}
-      <span class="pip-live-dot"></span>
+      <span
+        class="bg-brand-400 size-1.5 shrink-0 animate-[livePulse_1.1s_ease-in-out_infinite] rounded-full"
+      ></span>
     {/if}
-    <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor" style="flex-shrink:0">
+    <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor" class="shrink-0">
       <path
         fill-rule="evenodd"
         d="M2 3.75A.75.75 0 012.75 3h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 3.75zm0 4.5A.75.75 0 012.75 7.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 8.25zm0 4.5A.75.75 0 012.75 12h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 12.75zm0 4.5A.75.75 0 012.75 16.5h9.5a.75.75 0 010 1.5h-9.5A.75.75 0 012 17.25z"
@@ -66,7 +68,7 @@
   </button>
 {/if}
 
-<aside class="sidebar" class:open aria-label="Pipeline progress">
+<aside class="sidebar sidebar-pipeline" class:open aria-label="Pipeline progress">
   <div
     class="sidebar-header text-text-muted flex shrink-0 items-center justify-between border-b border-white/5 px-4 py-3 text-[0.7rem] font-semibold tracking-[0.08em] uppercase"
   >
@@ -218,7 +220,7 @@
                       : 'Working…'}
               </span>
               {#if pipeline.writingDraft && pipeline.firstDraftDone}
-                <p class="pip-stream m-0 mt-[3px] italic">
+                <p class="text-surface-border m-0 mt-[3px] line-clamp-2 text-[0.67rem] italic">
                   {pipeline.writingDraft.split(/\s+/).slice(-10).join(' ')}
                 </p>
               {/if}
@@ -228,7 +230,7 @@
                 >
                   {pipeline.thinkingNode}
                 </p>
-                <p class="pip-stream pip-thinking m-0 mt-[3px] italic">
+                <p class="m-0 mt-[3px] line-clamp-2 text-[0.67rem] text-[#2d3f55] italic">
                   {pipeline.thinkingBuffer.slice(-200)}
                 </p>
               {/if}
@@ -240,7 +242,7 @@
 
     {#if pipeline.running && pipeline.stalled}
       <div
-        class="mx-2.5 mt-2 flex flex-col gap-2 rounded-[6px] border border-[rgba(245,158,11,0.18)] bg-[rgba(245,158,11,0.07)] px-3 py-[0.6rem] text-[0.74rem] text-[#b45309]"
+        class="border-warning/18 bg-warning/7 text-warning mx-2.5 mt-2 flex flex-col gap-2 rounded-[6px] border px-3 py-[0.6rem] text-[0.74rem]"
       >
         <span>Taking longer than expected…</span>
         <Button
@@ -278,8 +280,7 @@
 
     {#if pipeline.paused && pipeline.runId}
       <div
-        class="pip-paused mx-2.5 mt-1.5 flex flex-col gap-2 rounded-[6px] px-3 py-[0.6rem] text-[0.74rem]"
-        class:all-approved={allPipelineNotesApproved}
+        class={`mx-2.5 mt-1.5 flex flex-col gap-2 rounded-[6px] border px-3 py-[0.6rem] text-[0.74rem] ${allPipelineNotesApproved ? 'border-success/18 bg-success/6 text-success' : 'border-brand-500/18 bg-brand-500/7 text-text-muted'}`}
       >
         {#if allPipelineNotesApproved}
           <span>All notes approved — resuming to final edit.</span>
@@ -377,27 +378,18 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-right: none;
     border-radius: 6px 0 0 6px;
-    color: #475569;
+    color: var(--color-text-muted);
     cursor: pointer;
     backdrop-filter: blur(8px);
   }
   .pip-tab:hover {
-    color: #94a3b8;
+    color: var(--color-text-secondary);
     background: rgba(20, 28, 46, 0.98);
   }
   .pip-tab-live {
-    color: #818cf8;
+    color: var(--color-brand-400);
     border-color: rgba(99, 102, 241, 0.3);
   }
-  .pip-live-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #818cf8;
-    flex-shrink: 0;
-    animation: livePulse 1.1s ease-in-out infinite;
-  }
-
   /* ── Pipeline connector line ─────────────────────────────────────── */
   .pipeline-item:not(:last-child)::after {
     content: '';
@@ -435,32 +427,6 @@
     background: transparent;
     border-color: #6366f1 transparent #6366f1 transparent;
     animation: pipSpin 0.85s linear infinite;
-  }
-
-  /* ── Stream text line-clamp ──────────────────────────────────────── */
-  .pip-stream {
-    font-size: 0.67rem;
-    color: #334155;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  .pip-thinking {
-    color: #2d3f55;
-  }
-
-  /* ── Paused notice colors ────────────────────────────────────────── */
-  .pip-paused {
-    border: 1px solid rgba(99, 102, 241, 0.18);
-    background: rgba(99, 102, 241, 0.07);
-    color: #64748b;
-  }
-  .pip-paused.all-approved {
-    border-color: rgba(34, 197, 94, 0.18);
-    background: rgba(34, 197, 94, 0.06);
-    color: #4ade80;
   }
 
   /* ── Responsive ──────────────────────────────────────────────────── */

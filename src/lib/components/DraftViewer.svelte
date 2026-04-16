@@ -101,11 +101,11 @@
   const copyIcon = `<path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z"/><path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z"/>`
 </script>
 
-<section class="card-surface overflow-hidden p-0">
+<section class="overflow-hidden rounded-2xl border border-white/7 bg-white/3">
   <div
     class="flex flex-wrap items-center justify-between gap-3 border-b border-white/6 px-5 py-3.5"
   >
-    <h2 class="m-0 text-[0.95rem] font-semibold tracking-[-0.02em] text-[#f8fafc]">
+    <h2 class="text-text-primary m-0 text-[0.95rem] font-semibold tracking-[-0.02em]">
       {finalPost ? 'Generated Post' : 'Draft'}
     </h2>
     {#if finalPost}
@@ -118,7 +118,11 @@
               {sources.length} source{sources.length !== 1 ? 's' : ''}
             </summary>
             <div class="sources-popup">
-              <p class="section-label">Sources</p>
+              <p
+                class="mb-2 text-[0.68rem] font-semibold tracking-[0.08em] text-white/25 uppercase"
+              >
+                Sources
+              </p>
               <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
                 {#each sources as s}
                   <li>
@@ -151,13 +155,17 @@
         variant="success"
         class="gap-1.5 rounded-full px-[0.6rem] py-[0.2rem] text-[0.72rem] font-medium"
       >
-        <span class="live-dot"></span>Writing first draft…
+        <span
+          class="size-1.5 shrink-0 animate-[livePulse_1.4s_ease-in-out_infinite] rounded-full bg-[#4ade80]"
+        ></span>Writing first draft…
       </Badge>
     {:else if running}
       <Badge
-        class="gap-1.5 rounded-full border-[rgba(167,139,250,0.25)] bg-[rgba(167,139,250,0.08)] px-[0.6rem] py-[0.2rem] text-[0.72rem] font-medium text-[#a78bfa]"
+        class="gap-1.5 rounded-full border-violet-400/25 bg-violet-400/8 px-[0.6rem] py-[0.2rem] text-[0.72rem] font-medium text-violet-400"
       >
-        <span class="live-dot" style="background:#a78bfa"></span>
+        <span
+          class="size-1.5 shrink-0 animate-[livePulse_1.4s_ease-in-out_infinite] rounded-full bg-violet-400"
+        ></span>
         {thinkingNode === 'editor' ? 'Final editing…' : 'Revising…'}
       </Badge>
     {:else if revisionNotes.length > 0}
@@ -220,7 +228,9 @@
 
     {#if revisionNotes.length > 0 && !finalPost && firstDraftDone && !factCheckerInterrupted}
       <div class="flex flex-col gap-1.5 border-t border-white/6 px-5 py-3.5">
-        <p class="section-label mb-1">Revision notes</p>
+        <p class="mb-1 text-[0.68rem] font-semibold tracking-[0.08em] text-white/25 uppercase">
+          Revision notes
+        </p>
         {#each revisionNotes as note}
           <div class="flex items-start gap-2 text-[0.8rem] leading-relaxed text-white/45">
             <span class="shrink-0 text-white/20">–</span>
@@ -241,23 +251,15 @@
     {/if}
   {:else}
     <div class="flex items-center gap-2.5 px-5 py-8 text-[0.85rem] text-white/25">
-      <span class="spin-sm"></span>
+      <span
+        class="border-brand-400/20 border-t-brand-400 inline-block size-[11px] shrink-0 animate-[layoutSpin_0.75s_linear_infinite] rounded-full border-[1.5px]"
+      ></span>
       <span>Writing first draft…</span>
     </div>
   {/if}
 </section>
 
 <style>
-  /* Live pulse dot — references global livePulse keyframe */
-  .live-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #4ade80;
-    flex-shrink: 0;
-    animation: livePulse 1.4s ease-in-out infinite;
-  }
-
   /* Sources dropdown — absolute positioning, no Tailwind equivalent */
   .sources-detail {
     position: relative;

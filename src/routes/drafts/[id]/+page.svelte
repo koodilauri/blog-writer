@@ -10,6 +10,8 @@
   import SourceCard from '$lib/components/SourceCard.svelte'
   import DraftViewer from '$lib/components/DraftViewer.svelte'
   import SeoPanel from '$lib/components/SeoPanel.svelte'
+  import { Button } from '$lib/components/ui/button'
+  import { Textarea } from '$lib/components/ui/textarea'
 
   function renderMd(text: string): string {
     return marked.parse(text, { async: false }) as string
@@ -764,26 +766,41 @@
   }
 </script>
 
-<main>
+<main class="mx-auto box-border flex w-full max-w-[1160px] flex-1 flex-col gap-5 p-4 md:p-6">
   {#if notFound}
-    <div class="not-found-card card">
-      <p class="not-found-msg">Draft not found.</p>
-      <button class="action-btn" onclick={() => goto('/generate')}>← Back to generate</button>
+    <div class="rounded-2xl border border-white/7 bg-white/3 p-6 py-12 text-center">
+      <p class="mb-6 text-[0.95rem] text-white/40">Draft not found.</p>
+      <Button onclick={() => goto('/generate')}>← Back to generate</Button>
     </div>
   {:else}
     {#if isDemo}
-      <div class="demo-banner" role="status">
-        <div class="demo-banner-left">
-          <span class="demo-badge">DEMO</span>
+      <div
+        class="border-brand-500/20 bg-brand-500/8 flex items-center justify-between gap-4 rounded-[10px] border px-4 py-2.5 text-[0.82rem] text-white/50"
+        role="status"
+      >
+        <div class="flex flex-wrap items-center gap-2.5">
+          <span
+            class="border-brand-500/35 bg-brand-500/20 shrink-0 rounded border px-2 py-0.5 text-[0.65rem] font-bold tracking-[0.08em] text-[#a5b4fc]"
+            >DEMO</span
+          >
           <span>This is a simulated run — pre-recorded content, no API calls.</span>
         </div>
-        <a href="/login" class="demo-signin-link">Sign in →</a>
+        <a
+          href="/login"
+          class="shrink-0 text-[0.82rem] font-medium whitespace-nowrap text-[#a5b4fc] no-underline transition-colors duration-150 hover:text-[#c7d2fe]"
+          >Sign in →</a
+        >
       </div>
     {/if}
 
     {#if showResumePrompt && savedSession}
-      <div class="resume-banner" role="alert">
-        <div class="resume-banner-icon">
+      <div
+        class="border-brand-600/25 bg-brand-600/8 flex items-center gap-3.5 rounded-xl border p-3.5"
+        role="alert"
+      >
+        <div
+          class="bg-brand-600/12 text-brand-400 flex size-8 shrink-0 items-center justify-center rounded-lg"
+        >
           <svg width="17" height="17" viewBox="0 0 20 20" fill="currentColor"
             ><path
               fill-rule="evenodd"
@@ -792,13 +809,19 @@
             /></svg
           >
         </div>
-        <div class="resume-banner-body">
-          <p class="resume-banner-title">Resume in-progress post?</p>
-          <p class="resume-banner-sub">{(savedSession as any).topic ?? 'Untitled'}</p>
+        <div class="min-w-0 flex-1">
+          <p class="text-text-primary m-0 mb-0.5 text-[0.85rem] font-semibold">
+            Resume in-progress post?
+          </p>
+          <p
+            class="m-0 overflow-hidden text-[0.78rem] text-ellipsis whitespace-nowrap text-white/35"
+          >
+            {(savedSession as any).topic ?? 'Untitled'}
+          </p>
         </div>
-        <div class="resume-banner-actions">
-          <button class="resume-btn" onclick={resumeSavedSession}>Resume</button>
-          <button class="discard-btn" onclick={discardSession}>Discard</button>
+        <div class="flex shrink-0 gap-2">
+          <Button size="sm" onclick={resumeSavedSession}>Resume</Button>
+          <Button variant="outline" size="sm" onclick={discardSession}>Discard</Button>
         </div>
       </div>
     {/if}
@@ -808,12 +831,18 @@
         {#if running && !currentDraft && !writingDraft && !sourcesInterrupted && !interrupted && !factCheckerInterrupted}
           <ActivitySpinner activity={currentActivity} sources={liveSources} {writingOutline} />
         {:else if sourcesInterrupted}
-          <section class="card review-sources-card">
-            <div class="card-head">
-              <h2>Review Sources</h2>
-              <p>Uncheck sources to remove them, add your own URLs, then approve.</p>
+          <section class="rounded-2xl border border-white/7 bg-white/3 p-6">
+            <div class="mb-5">
+              <h2
+                class="font-display text-text-primary m-0 mb-0.5 text-[0.95rem] font-semibold tracking-[-0.02em]"
+              >
+                Review Sources
+              </h2>
+              <p class="m-0 text-[0.82rem] text-white/30">
+                Uncheck sources to remove them, add your own URLs, then approve.
+              </p>
             </div>
-            <ul class="source-list">
+            <ul class="m-0 flex list-none flex-col gap-2 p-0">
               {#each interruptedSources as source, i}
                 <SourceCard
                   url={source.url}
@@ -824,22 +853,28 @@
                 />
               {/each}
             </ul>
-            <div class="field" style="margin-top: 1rem;">
-              <label for="add-urls">Add URLs (one per line)</label>
-              <textarea
+            <div class="mt-4 flex flex-col gap-[0.4rem]">
+              <label
+                for="add-urls"
+                class="text-[0.78rem] font-medium tracking-[0.01em] text-white/45"
+                >Add URLs (one per line)</label
+              >
+              <Textarea
                 id="add-urls"
                 bind:value={addUrlsInput}
                 rows={3}
                 placeholder="https://example.com/article"
-              ></textarea>
+              />
             </div>
-            <button
-              class="action-btn"
+            <Button
+              class="mt-3 w-full gap-2"
               onclick={approveSources}
               disabled={running || checkedSources.size === 0}
             >
-              {#if running}<span class="spin"></span> Resuming…{:else}Approve & Continue{/if}
-            </button>
+              {#if running}<span
+                  class="border-brand-400/25 border-t-brand-400 inline-block size-3.5 shrink-0 animate-[layoutSpin_0.75s_linear_infinite] rounded-full border-2"
+                ></span> Resuming…{:else}Approve & Continue{/if}
+            </Button>
           </section>
         {:else if interrupted}
           <OutlineApproval
@@ -875,19 +910,23 @@
 
     <!-- Error -->
     {#if errorMsg}
-      <div class="error-banner" role="alert">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"
+      <div
+        class="border-error/20 bg-error/7 flex items-start gap-2.5 rounded-[10px] border px-4 py-3 text-[0.85rem] text-[#fca5a5]"
+        role="alert"
+      >
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" class="mt-px shrink-0"
           ><path
             fill-rule="evenodd"
             d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.5a.75.75 0 001.5 0v-4.5zm-.75 7.5a.75.75 0 100-1.5.75.75 0 000 1.5z"
             clip-rule="evenodd"
           /></svg
         >
-        <div>
+        <div class="flex flex-col gap-1.5">
           <span>{errorMsg}</span>
           {#if canResume && !running}
-            <button class="resume-link" onclick={resumeFromCheckpoint}
-              >Resume from last checkpoint</button
+            <button
+              class="text-brand-400 cursor-pointer border-none bg-transparent p-0 text-left text-[0.8rem] font-medium underline"
+              onclick={resumeFromCheckpoint}>Resume from last checkpoint</button
             >
           {/if}
         </div>
@@ -905,907 +944,5 @@
   :global(body) {
     margin: 0;
     overflow-x: hidden;
-  }
-
-  .app {
-    min-height: 100vh;
-    background: #080c14;
-    font-family: 'Inter', ui-sans-serif, sans-serif;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-  }
-
-  .bg {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-  }
-  .orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(120px);
-  }
-  .orb-1 {
-    width: 700px;
-    height: 700px;
-    background: radial-gradient(circle, rgba(59, 77, 232, 0.14) 0%, transparent 70%);
-    top: -200px;
-    left: -200px;
-    animation: orbDrift 32s ease-in-out infinite;
-  }
-  .orb-2 {
-    width: 500px;
-    height: 500px;
-    background: radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
-    top: 30%;
-    right: -150px;
-    animation: orbDrift 40s ease-in-out infinite reverse;
-  }
-  .orb-3 {
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(29, 78, 216, 0.09) 0%, transparent 70%);
-    bottom: -100px;
-    left: 30%;
-    animation: orbDrift 28s ease-in-out infinite;
-    animation-delay: -10s;
-  }
-  @keyframes orbDrift {
-    0%,
-    100% {
-      transform: translate(0, 0);
-    }
-    33% {
-      transform: translate(40px, 30px);
-    }
-    66% {
-      transform: translate(-20px, 50px);
-    }
-  }
-  .bg-dots {
-    position: fixed;
-    inset: 0;
-    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-    background-size: 32px 32px;
-    mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black 20%, transparent 100%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  header {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 1.25rem;
-    height: 52px;
-    background: rgba(8, 12, 20, 0.85);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-  .hd-left {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-  .hd-right {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .back-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    background: none;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 7px;
-    color: rgba(255, 255, 255, 0.45);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.8rem;
-    font-weight: 500;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    transition:
-      border-color 0.15s,
-      color 0.15s;
-  }
-  .back-btn:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.75);
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-  }
-  .logo-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.25) 0%,
-      rgba(129, 140, 248, 0.12) 100%
-    );
-    border: 1px solid rgba(129, 140, 248, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
-  }
-  .logo-text {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-  .logo-name {
-    font-family: 'DM Sans', 'Inter', sans-serif;
-    font-size: 1rem;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-    background: linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 50%, #818cf8 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    line-height: 1.1;
-  }
-  .logo-tag {
-    font-size: 0.6rem;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(129, 140, 248, 0.5);
-    line-height: 1;
-  }
-  .user-email {
-    font-size: 0.78rem;
-    color: rgba(255, 255, 255, 0.3);
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .body {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex: 1;
-    min-height: 0;
-  }
-
-  main {
-    flex: 1;
-    min-width: 0;
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    max-width: 1160px;
-    width: 100%;
-    margin: 0 auto;
-    box-sizing: border-box;
-  }
-
-  .not-found-card {
-    text-align: center;
-    padding: 3rem 1.5rem;
-  }
-  .not-found-msg {
-    color: rgba(255, 255, 255, 0.4);
-    margin: 0 0 1.5rem;
-    font-size: 0.95rem;
-  }
-
-  /* ── Two-column generation layout ───────────────── */
-  .gen-layout {
-    display: flex;
-    gap: 1.25rem;
-    align-items: flex-start;
-  }
-  .left-col {
-    flex: 1 1 320px;
-    min-width: 0;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.32s ease;
-  }
-  .gen-layout.has-left .left-col {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .pipeline-col {
-    flex: 0 0 280px;
-  }
-  .pipeline-card {
-    padding: 1rem 1.125rem;
-  }
-  .pipeline-card .card-head {
-    margin-bottom: 0.875rem;
-  }
-
-  /* ── Cards ───────────────────────────────────────── */
-  .card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 14px;
-    padding: 1.5rem;
-  }
-
-  .card-head {
-    margin-bottom: 1.25rem;
-  }
-  .card-head h2 {
-    font-family: 'DM Sans', 'Inter', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: #f8fafc;
-    letter-spacing: -0.02em;
-    margin: 0 0 0.2rem;
-  }
-  .card-head p {
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.3);
-    margin: 0;
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-  label {
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.45);
-    letter-spacing: 0.01em;
-  }
-  .outline-textarea {
-    field-sizing: content; /* auto-grow with content */
-    min-height: 12rem;
-  }
-  textarea {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    color: #f1f5f9;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.9rem;
-    padding: 0.7rem 0.875rem;
-    outline: none;
-    resize: vertical;
-    transition:
-      border-color 0.2s,
-      box-shadow 0.2s,
-      background 0.2s;
-    width: 100%;
-    box-sizing: border-box;
-    min-height: 80px;
-  }
-  textarea::placeholder {
-    color: rgba(255, 255, 255, 0.12);
-  }
-  textarea:focus {
-    border-color: rgba(129, 140, 248, 0.5);
-    background: rgba(129, 140, 248, 0.06);
-    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.08);
-  }
-
-  /* ── Source approval ─────────────────────────────── */
-  .source-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  /* ── Pipeline ─────────────────────────────────────── */
-  .pipeline {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-  .pip-dot {
-    width: 15px;
-    height: 15px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 3px;
-  }
-  .pip-dot.done {
-    background: rgba(79, 70, 229, 0.5);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-  }
-  .pip-dot.complete {
-    background: #4ade80;
-    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.15);
-  }
-  .pipeline-item.done-item .pip-label {
-    color: #4ade80;
-    font-weight: 500;
-  }
-  .pip-dot.spinning {
-    border: 2px solid rgba(129, 140, 248, 0.3);
-    border-top-color: #818cf8;
-    animation: spin 0.8s linear infinite;
-    background: transparent;
-  }
-  .pip-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    min-width: 0;
-    flex: 1;
-  }
-  .pip-label {
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.65);
-  }
-  .pip-detail {
-    font-size: 0.75rem;
-  }
-  .pip-detail.approved {
-    color: #4ade80;
-  }
-  .pip-detail.rejected {
-    color: #f87171;
-  }
-
-  /* ── Source approval ─────────────────────────────── */
-  .source-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .action-btn {
-    background: #4f46e5;
-    border: none;
-    border-radius: 10px;
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.875rem;
-    font-weight: 600;
-    padding: 0.7rem 1.25rem;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition:
-      background 0.2s,
-      transform 0.15s;
-    margin-top: 0.75rem;
-  }
-  .action-btn:hover:not(:disabled) {
-    background: #4338ca;
-    transform: translateY(-1px);
-  }
-  .action-btn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  /* ── Error ───────────────────────────────────────── */
-  .error-banner {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.625rem;
-    background: rgba(248, 113, 113, 0.07);
-    border: 1px solid rgba(248, 113, 113, 0.2);
-    border-radius: 10px;
-    padding: 0.75rem 1rem;
-    font-size: 0.85rem;
-    color: #fca5a5;
-  }
-  .error-banner > div {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-  .resume-link {
-    background: none;
-    border: none;
-    color: #818cf8;
-    font-size: 0.8rem;
-    font-weight: 500;
-    text-decoration: underline;
-    cursor: pointer;
-    padding: 0;
-    text-align: left;
-  }
-
-  /* ── Demo banner ─────────────────────────────────── */
-  .demo-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.625rem 1rem;
-    background: rgba(99, 102, 241, 0.08);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    border-radius: 10px;
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.5);
-  }
-  .demo-banner-left {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    flex-wrap: wrap;
-  }
-  .demo-badge {
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    background: rgba(99, 102, 241, 0.2);
-    border: 1px solid rgba(99, 102, 241, 0.35);
-    color: #a5b4fc;
-    flex-shrink: 0;
-  }
-  .demo-signin-link {
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: #a5b4fc;
-    text-decoration: none;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: color 0.15s;
-  }
-  .demo-signin-link:hover {
-    color: #c7d2fe;
-  }
-
-  /* ── Resume banner ───────────────────────────────── */
-  .resume-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.875rem;
-    background: rgba(79, 70, 229, 0.08);
-    border: 1px solid rgba(79, 70, 229, 0.25);
-    border-radius: 12px;
-    padding: 0.875rem 1rem;
-  }
-  .resume-banner-icon {
-    color: #818cf8;
-    flex-shrink: 0;
-    background: rgba(79, 70, 229, 0.12);
-    border-radius: 8px;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .resume-banner-body {
-    flex: 1;
-    min-width: 0;
-  }
-  .resume-banner-title {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #f1f5f9;
-    margin: 0 0 0.15rem;
-  }
-  .resume-banner-sub {
-    font-size: 0.78rem;
-    color: rgba(255, 255, 255, 0.35);
-    margin: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .resume-banner-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
-  }
-  .resume-btn {
-    background: #4f46e5;
-    border: none;
-    border-radius: 7px;
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.8rem;
-    font-weight: 600;
-    padding: 0.45rem 0.875rem;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .resume-btn:hover {
-    background: #4338ca;
-  }
-  .discard-btn {
-    background: none;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 7px;
-    color: rgba(255, 255, 255, 0.4);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.8rem;
-    padding: 0.45rem 0.875rem;
-    cursor: pointer;
-    transition:
-      border-color 0.15s,
-      color 0.15s;
-  }
-  .discard-btn:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  /* ── Stall notice ────────────────────────────────── */
-  .stall-notice {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-top: 0.875rem;
-    background: rgba(251, 191, 36, 0.07);
-    border: 1px solid rgba(251, 191, 36, 0.2);
-    border-radius: 8px;
-    padding: 0.625rem 0.875rem;
-    font-size: 0.8rem;
-    color: #fbbf24;
-  }
-  .retry-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    flex-shrink: 0;
-    background: rgba(251, 191, 36, 0.12);
-    border: 1px solid rgba(251, 191, 36, 0.25);
-    border-radius: 6px;
-    color: #fbbf24;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    transition:
-      background 0.15s,
-      border-color 0.15s;
-  }
-  .retry-btn:hover {
-    background: rgba(251, 191, 36, 0.2);
-    border-color: rgba(251, 191, 36, 0.4);
-  }
-
-  /* ── Pause / resume ─────────────────────────────── */
-  .pause-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    width: 100%;
-    justify-content: center;
-    margin-top: 0.625rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 7px;
-    color: rgba(255, 255, 255, 0.4);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.78rem;
-    font-weight: 500;
-    padding: 0.4rem 0.75rem;
-    cursor: pointer;
-    transition:
-      background 0.12s,
-      border-color 0.12s,
-      color 0.12s;
-  }
-  .pause-btn:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.65);
-  }
-  .paused-notice {
-    margin-top: 0.625rem;
-    background: rgba(251, 191, 36, 0.06);
-    border: 1px solid rgba(251, 191, 36, 0.18);
-    border-radius: 8px;
-    padding: 0.625rem 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .paused-notice.all-approved {
-    background: rgba(74, 222, 128, 0.06);
-    border-color: rgba(74, 222, 128, 0.2);
-  }
-  .paused-notice > span {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
-    line-height: 1.4;
-  }
-  .paused-notice.all-approved > span {
-    color: #4ade80;
-  }
-  .resume-pause-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    align-self: flex-start;
-    background: #4f46e5;
-    border: none;
-    border-radius: 6px;
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    transition: background 0.12s;
-  }
-  .resume-pause-btn:hover {
-    background: #4338ca;
-  }
-
-  /* ── Pipeline item ───────────────────────────────── */
-  .pipeline-item {
-    display: flex;
-    gap: 0.75rem;
-    align-items: flex-start;
-    padding: 0.5rem 0.375rem;
-    position: relative;
-    border-radius: 6px;
-    margin: 0 -0.375rem;
-    transition: background 0.12s;
-  }
-  .pipeline-item.has-extra {
-    cursor: pointer;
-  }
-  .pipeline-item.has-extra:hover {
-    background: rgba(255, 255, 255, 0.03);
-  }
-  .pipeline-item.active-popup {
-    background: rgba(129, 140, 248, 0.07);
-  }
-  .pipeline-item.active-popup .pip-expand-icon {
-    color: #818cf8;
-    transform: rotate(90deg);
-  }
-  .pip-expand-icon {
-    color: rgba(255, 255, 255, 0.18);
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    margin-left: auto;
-    padding-left: 0.25rem;
-    transition:
-      color 0.12s,
-      transform 0.18s;
-  }
-  .pipeline-item.has-extra:hover .pip-expand-icon {
-    color: rgba(255, 255, 255, 0.45);
-  }
-  .pipeline-item:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    left: calc(0.375rem + 7px);
-    top: calc(0.5rem + 15px);
-    bottom: -0.5rem;
-    width: 1px;
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  /* ── Stage popup ─────────────────────────────────── */
-  .stage-popup-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 49;
-  }
-  .stage-popup {
-    position: fixed;
-    z-index: 50;
-    width: 290px;
-    max-height: 400px;
-    background: #0d1422;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.7),
-      0 4px 16px rgba(0, 0, 0, 0.4);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    animation: popupIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  @keyframes popupIn {
-    from {
-      opacity: 0;
-      transform: translateX(10px) scale(0.97);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0) scale(1);
-    }
-  }
-  .stage-popup-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.625rem 0.875rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    flex-shrink: 0;
-  }
-  .stage-popup-title {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.6);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .stage-popup-close {
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.25);
-    cursor: pointer;
-    padding: 0.15rem;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    transition: color 0.12s;
-  }
-  .stage-popup-close:hover {
-    color: rgba(255, 255, 255, 0.65);
-  }
-  .stage-popup-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.75rem 0.875rem;
-  }
-  .popup-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .popup-list li {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.55);
-    line-height: 1.55;
-    padding-left: 0.875rem;
-    position: relative;
-  }
-  .popup-list li::before {
-    content: '–';
-    position: absolute;
-    left: 0;
-    color: rgba(255, 255, 255, 0.22);
-  }
-  .popup-sources {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-  .popup-sources a {
-    font-size: 0.78rem;
-    color: #818cf8;
-    text-decoration: none;
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .popup-markdown {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
-    white-space: pre-wrap;
-    font-family: 'Lora', Georgia, serif;
-    line-height: 1.6;
-    margin: 0;
-  }
-  .popup-seo {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  .popup-seo-label {
-    font-size: 0.62rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.2);
-    margin: 0.625rem 0 0.2rem;
-  }
-  .popup-seo-label:first-child {
-    margin-top: 0;
-  }
-  .popup-seo-val {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin: 0;
-    line-height: 1.5;
-  }
-  .popup-seo-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    margin-top: 0.2rem;
-  }
-
-  /* ── Spinners ─────────────────────────────────────── */
-  .spin {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-    border: 2px solid rgba(255, 255, 255, 0.25);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-  .spin-sm {
-    width: 16px;
-    height: 16px;
-    display: inline-block;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-top-color: rgba(255, 255, 255, 0.4);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* ── Responsive ──────────────────────────────────── */
-  @media (max-width: 900px) {
-    .gen-layout {
-      flex-direction: column-reverse;
-    }
-    .gen-layout .left-col {
-      flex: 1 1 auto;
-    }
-    .gen-layout .pipeline-col {
-      flex: 0 0 auto;
-      width: 100%;
-      position: static;
-      max-height: none;
-    }
-  }
-  @media (max-width: 768px) {
-    .user-email {
-      display: none;
-    }
-    .seo-two-col {
-      grid-template-columns: 1fr;
-    }
-    main {
-      padding: 1rem;
-    }
-  }
-  @media (max-width: 480px) {
-    .card {
-      padding: 1.125rem;
-    }
-    .draft-body {
-      font-size: 0.875rem;
-      padding: 1rem;
-    }
   }
 </style>

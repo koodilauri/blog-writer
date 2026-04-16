@@ -16,8 +16,7 @@
 </script>
 
 <header
-  class="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-white/6 bg-[rgba(8,12,20,0.88)] px-5 backdrop-blur-md"
-  style="height:52px"
+  class="sticky top-0 z-30 flex h-13 items-center justify-between gap-2 border-b border-white/6 bg-[rgba(8,12,20,0.88)] px-5 backdrop-blur-md"
 >
   <div class="flex min-w-0 items-center gap-2.5">
     <Button
@@ -52,7 +51,11 @@
       </svg>
     </Button>
 
-    <a href={homeHref} class="logo" aria-label="BlogWriter home">
+    <a
+      href={homeHref}
+      class="flex shrink-0 items-center gap-2.5 no-underline"
+      aria-label="BlogWriter home"
+    >
       <div
         class="border-brand-400/25 flex size-8 shrink-0 items-center justify-center rounded-lg border bg-linear-to-br from-[rgba(99,102,241,0.2)] to-[rgba(129,140,248,0.1)]"
       >
@@ -86,7 +89,10 @@
         </svg>
       </div>
       <div class="flex flex-col gap-px">
-        <span class="logo-name">BlogWriter</span>
+        <span
+          class="bg-linear-to-br from-[#e2e8f0] to-[#a5b4fc] bg-clip-text text-[0.9rem] leading-[1.1] font-bold tracking-[-0.02em] text-transparent"
+          >BlogWriter</span
+        >
         <span
           class="text-text-muted text-[0.6rem] leading-none font-medium tracking-[0.05em] uppercase"
           >AI-powered</span
@@ -113,25 +119,3 @@
     <Button variant="ghost" size="sm" onclick={onlogout}>Sign out</Button>
   </div>
 </header>
-
-<style>
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    text-decoration: none;
-    flex-shrink: 0;
-  }
-
-  /* Gradient text — requires -webkit-background-clip */
-  .logo-name {
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    background: linear-gradient(135deg, #e2e8f0 0%, #a5b4fc 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    line-height: 1.1;
-  }
-</style>

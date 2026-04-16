@@ -37,7 +37,9 @@
   <div class="sidebar-body flex-1 overflow-y-auto py-1.5">
     {#if loading}
       <div class="flex items-center justify-center px-4 py-8">
-        <span class="spin-sm"></span>
+        <span
+          class="border-brand-400/20 border-t-brand-400 inline-block size-[11px] shrink-0 animate-[layoutSpin_0.75s_linear_infinite] rounded-full border-[1.5px]"
+        ></span>
       </div>
     {:else if items.length === 0}
       <p class="text-surface-border m-0 px-4 py-8 text-center text-[0.78rem] leading-relaxed">
@@ -48,7 +50,7 @@
         <div class="group/item border-b border-white/3 hover:bg-white/2.5">
           <div class="flex items-stretch">
             <button
-              class="min-w-0 flex-1 cursor-pointer border-none bg-transparent px-3 py-[0.55rem] text-left"
+              class="history-item-btn min-w-0 flex-1 cursor-pointer border-none bg-transparent px-3 py-[0.55rem] text-left"
               onclick={() => onnavigate(item.id)}
             >
               <span

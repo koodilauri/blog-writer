@@ -4,6 +4,7 @@
   import { onMount } from 'svelte'
   import { LoginResponseSchema } from '$lib/schemas/login'
   import { Button } from '$lib/components/ui/button'
+  import { Input } from '$lib/components/ui/input'
 
   let email = ''
   let password = ''
@@ -42,9 +43,11 @@
   }
 </script>
 
-<div class="root">
+<div
+  class="bg-surface-base relative box-border flex min-h-screen items-center justify-center overflow-hidden p-8"
+>
   <!-- Slow drifting orbs -->
-  <div class="bg" aria-hidden="true">
+  <div class="pointer-events-none absolute inset-0" aria-hidden="true">
     <div class="orb orb-1"></div>
     <div class="orb orb-2"></div>
     <div class="orb orb-3"></div>
@@ -54,8 +57,16 @@
   <!-- Dot grid, fades toward edges -->
   <div class="bg-dots" aria-hidden="true"></div>
 
-  <main class:visible>
-    <div class="logo">
+  <main
+    class="relative z-10 w-full max-w-[360px] transition-[opacity,transform] duration-600 ease-out"
+    class:opacity-0={!visible}
+    class:translate-y-4={!visible}
+    class:opacity-100={visible}
+    class:translate-y-0={visible}
+  >
+    <div
+      class="mb-9 flex items-center gap-[0.6rem] text-base font-semibold tracking-[-0.01em] text-white/80"
+    >
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
         <rect width="28" height="28" rx="8" fill="white" fill-opacity="0.08" />
         <path
@@ -69,7 +80,9 @@
       <span>BlogWriter</span>
     </div>
 
-    <h1>Login or try the demo</h1>
+    <h1 class="text-text-primary m-0 mb-1.5 text-[2rem] leading-[1.1] font-bold tracking-[-0.04em]">
+      Login or try the demo
+    </h1>
     <p class="mt-0 mb-8 text-[0.9rem] text-white/30">Sign in to continue writing.</p>
 
     <form class="flex flex-col gap-4" onsubmit={onSubmit}>
@@ -77,11 +90,10 @@
         <label for="email" class="text-[0.8rem] font-medium tracking-[0.01em] text-white/45">
           Email
         </label>
-        <input
+        <Input
           id="email"
           bind:value={email}
           type="email"
-          class="input-dark"
           placeholder="you@company.com"
           autocomplete="email"
           required
@@ -94,11 +106,10 @@
             Password
           </label>
         </div>
-        <input
+        <Input
           id="password"
           bind:value={password}
-          type="input"
-          class="input-dark"
+          type="password"
           placeholder="Enter your password"
           autocomplete="current-password"
           required
@@ -106,8 +117,11 @@
       </div>
 
       {#if error}
-        <div class="error-msg" role="alert">
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+        <div
+          class="border-error/18 bg-error/8 flex items-center gap-2 rounded-lg border px-3 py-[0.55rem] text-[0.8rem] text-[#fca5a5]"
+          role="alert"
+        >
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" class="shrink-0">
             <path
               fill-rule="evenodd"
               d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.5a.75.75 0 001.5 0v-4.5zm-.75 7.5a.75.75 0 100-1.5.75.75 0 000 1.5z"
@@ -120,7 +134,9 @@
 
       <Button type="submit" disabled={loading} class="mt-1 h-11 w-full text-[0.9rem]">
         {#if loading}
-          <span class="spin"></span>
+          <span
+            class="border-brand-400/25 border-t-brand-400 inline-block size-3.5 shrink-0 animate-[layoutSpin_0.75s_linear_infinite] rounded-full border-2"
+          ></span>
           Signing in…
         {:else}
           Sign in
@@ -128,11 +144,17 @@
       </Button>
     </form>
 
-    <div class="demo-divider">
-      <span>or</span>
+    <div
+      class="my-3 flex items-center gap-3 before:h-px before:flex-1 before:bg-white/7 after:h-px after:flex-1 after:bg-white/7"
+    >
+      <span class="text-[0.75rem] text-white/20">or</span>
     </div>
 
-    <Button variant="outline" class="h-[2.8rem] w-full" onclick={() => void goto('/generate?demo')}>
+    <Button
+      variant="outline"
+      class="demo-btn h-[2.8rem] w-full"
+      onclick={() => void goto('/generate?demo')}
+    >
       <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
         <path
           fill-rule="evenodd"
@@ -150,26 +172,7 @@
     margin: 0;
   }
 
-  .root {
-    min-height: 100vh;
-    background: #080c14;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Inter', ui-sans-serif, sans-serif;
-    position: relative;
-    overflow: hidden;
-    padding: 2rem;
-    box-sizing: border-box;
-  }
-
-  /* Orbs */
-  .bg {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
+  /* Orbs — complex radial-gradient + filter:blur animations, cannot be Tailwind */
   .orb {
     position: absolute;
     border-radius: 50%;
@@ -249,7 +252,7 @@
     }
   }
 
-  /* Dot grid */
+  /* Dot grid — uses mask-image which has no Tailwind equivalent */
   .bg-dots {
     position: absolute;
     inset: 0;
@@ -257,73 +260,5 @@
     background-size: 32px 32px;
     mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 20%, transparent 100%);
     pointer-events: none;
-  }
-
-  /* Content */
-  main {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    max-width: 360px;
-    opacity: 0;
-    transform: translateY(16px);
-    transition:
-      opacity 0.6s ease,
-      transform 0.6s ease;
-  }
-
-  main.visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 2.25rem;
-    font-size: 1rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.8);
-    letter-spacing: -0.01em;
-  }
-
-  h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #f8fafc;
-    letter-spacing: -0.04em;
-    margin: 0 0 0.4rem;
-    line-height: 1.1;
-  }
-
-  .error-msg {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    color: #fca5a5;
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.18);
-    border-radius: 8px;
-    padding: 0.55rem 0.75rem;
-  }
-
-  .demo-divider {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin: 0.75rem 0;
-  }
-  .demo-divider::before,
-  .demo-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.07);
-  }
-  .demo-divider span {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.2);
   }
 </style>

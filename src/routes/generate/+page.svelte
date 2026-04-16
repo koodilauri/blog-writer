@@ -53,16 +53,18 @@
   }
 </script>
 
-<main>
+<main class="mx-auto box-border flex w-full max-w-[1160px] flex-1 flex-col gap-5 p-6">
   {#if resumeRunId}
-    <div class="resume-banner">
-      <div class="resume-banner-left">
+    <div
+      class="border-brand-400/18 bg-brand-400/6 flex items-center justify-between gap-4 rounded-[10px] border px-4 py-2.5 text-[0.82rem]"
+    >
+      <div class="flex min-w-0 items-center gap-2.5">
         <svg
           width="14"
           height="14"
           viewBox="0 0 20 20"
           fill="currentColor"
-          style="flex-shrink:0;color:#818cf8"
+          class="text-brand-400 shrink-0"
         >
           <path
             fill-rule="evenodd"
@@ -71,30 +73,49 @@
           />
         </svg>
         <div>
-          <span class="resume-title">Unfinished draft</span>
-          {#if resumeTopic}<span class="resume-topic">{resumeTopic}</span>{/if}
+          <span class="block text-[0.8rem] font-semibold text-[#a5b4fc]">Unfinished draft</span>
+          {#if resumeTopic}<span
+              class="block overflow-hidden text-[0.76rem] text-ellipsis whitespace-nowrap text-white/35"
+              >{resumeTopic}</span
+            >{/if}
         </div>
       </div>
-      <a href="/drafts/{resumeRunId}?chat={resumeRunId}" class="resume-link">Continue →</a>
+      <a
+        href="/drafts/{resumeRunId}?chat={resumeRunId}"
+        class="text-brand-400 shrink-0 text-[0.82rem] font-semibold whitespace-nowrap no-underline transition-colors duration-150 hover:text-[#a5b4fc]"
+        >Continue →</a
+      >
     </div>
   {/if}
 
   {#if isDemo}
-    <div class="demo-banner" role="status">
-      <div class="demo-banner-left">
-        <span class="demo-badge">DEMO</span>
+    <div
+      class="border-brand-500/20 bg-brand-500/8 flex items-center justify-between gap-4 rounded-[10px] border px-4 py-2.5 text-[0.82rem] text-white/50"
+      role="status"
+    >
+      <div class="flex flex-wrap items-center gap-2.5">
+        <span
+          class="demo-badge border-brand-500/35 bg-brand-500/20 shrink-0 rounded border px-2 py-0.5 text-[0.65rem] font-bold tracking-[0.08em] text-[#a5b4fc]"
+          >DEMO</span
+        >
         <span
           >This is a simulated run — pre-recorded content, no API calls. Hit Generate to watch it
           play back.</span
         >
       </div>
-      <a href="/login" class="demo-signin-link">Sign in →</a>
+      <a
+        href="/login"
+        class="shrink-0 text-[0.82rem] font-medium whitespace-nowrap text-[#a5b4fc] no-underline transition-colors duration-150 hover:text-[#c7d2fe]"
+        >Sign in →</a
+      >
     </div>
   {/if}
 
-  <section class="card-surface">
+  <section class="rounded-2xl border border-white/7 bg-white/3 p-6">
     <div class="mb-5">
-      <h1 class="font-display m-0 mb-1 text-[1.1rem] font-bold tracking-[-0.03em] text-[#f8fafc]">
+      <h1
+        class="font-display text-text-primary m-0 mb-1 text-[1.1rem] font-bold tracking-[-0.03em]"
+      >
         Generate a post
       </h1>
       <p class="m-0 text-[0.82rem] text-white/30">Describe what you want to write about.</p>
@@ -151,7 +172,12 @@
         </div>
       </div>
 
-      <Button type="submit" size="lg" class="mt-1 w-full gap-2" disabled={!topic.trim()}>
+      <Button
+        type="submit"
+        size="lg"
+        class="generate-btn mt-1 w-full gap-2"
+        disabled={!topic.trim()}
+      >
         <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
           <path
             d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
@@ -162,121 +188,3 @@
     </form>
   </section>
 </main>
-
-<style>
-  :global(body) {
-    margin: 0;
-    overflow-x: hidden;
-  }
-
-  main {
-    flex: 1;
-    min-width: 0;
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    max-width: 1160px;
-    width: 100%;
-    margin: 0 auto;
-    box-sizing: border-box;
-  }
-
-  /* ── Resume banner ───────────────────────────────── */
-  .resume-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.625rem 1rem;
-    background: rgba(129, 140, 248, 0.06);
-    border: 1px solid rgba(129, 140, 248, 0.18);
-    border-radius: 10px;
-    font-size: 0.82rem;
-  }
-  .resume-banner-left {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    min-width: 0;
-  }
-  .resume-title {
-    display: block;
-    font-weight: 600;
-    color: #a5b4fc;
-    font-size: 0.8rem;
-  }
-  .resume-topic {
-    display: block;
-    color: rgba(255, 255, 255, 0.35);
-    font-size: 0.76rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .resume-link {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #818cf8;
-    text-decoration: none;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: color 0.15s;
-  }
-  .resume-link:hover {
-    color: #a5b4fc;
-  }
-
-  /* ── Demo banner ─────────────────────────────────── */
-  .demo-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.625rem 1rem;
-    background: rgba(99, 102, 241, 0.08);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    border-radius: 10px;
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .demo-banner-left {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    flex-wrap: wrap;
-  }
-
-  .demo-badge {
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    background: rgba(99, 102, 241, 0.2);
-    border: 1px solid rgba(99, 102, 241, 0.35);
-    color: #a5b4fc;
-    flex-shrink: 0;
-  }
-
-  .demo-signin-link {
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: #a5b4fc;
-    text-decoration: none;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: color 0.15s;
-  }
-  .demo-signin-link:hover {
-    color: #c7d2fe;
-  }
-
-  /* ── Responsive ──────────────────────────────────── */
-  @media (max-width: 768px) {
-    main {
-      padding: 1rem;
-    }
-  }
-</style>

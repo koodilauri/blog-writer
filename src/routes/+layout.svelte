@@ -196,7 +196,7 @@
 {#if isLoginPage}
   {@render children()}
 {:else}
-  <div class="app">
+  <div class="bg-surface-base relative flex h-screen flex-col">
     <!-- Ambient background -->
     <div class="bg" aria-hidden="true">
       <div class="orb orb-1"></div>
@@ -216,11 +216,11 @@
     />
 
     <!-- ── Body ─────────────────────────────────────────────────────────── -->
-    <div class="body">
+    <div class="relative z-10 flex min-h-0 flex-1 overflow-hidden">
       <!-- Mobile backdrop for history sidebar -->
       {#if historyOpen}
         <div
-          class="sidebar-backdrop"
+          class="fixed inset-0 z-35 cursor-pointer bg-black/55"
           role="button"
           tabindex="-1"
           onclick={() => (historyOpen = false)}
@@ -244,9 +244,13 @@
       />
 
       <!-- ── Main column: content + pipeline ──────────────────────────── -->
-      <div class="main-column">
+      <div
+        class="flex min-h-0 min-w-0 flex-1 flex-col items-stretch overflow-y-auto lg:flex-row lg:items-start"
+      >
         <!-- Main content (first in DOM = left in flex-row, top in flex-col) -->
-        <div class="content-area">
+        <div
+          class="relative z-10 flex min-h-auto min-w-0 flex-1 flex-col [view-transition-name:main-content] lg:min-h-full"
+        >
           {@render children()}
         </div>
 
@@ -302,16 +306,6 @@
   :global(body) {
     margin: 0;
     overflow: hidden; /* app scrolls internally via .main-column */
-  }
-
-  /* ── App shell ─────────────────────────────────────────────────────── */
-  .app {
-    height: 100vh; /* lock to viewport — prevents document scroll */
-    background: #080c14;
-    font-family: 'Inter', ui-sans-serif, sans-serif;
-    display: flex;
-    flex-direction: column;
-    position: relative;
   }
 
   /* ── Background ────────────────────────────────────────────────────── */
@@ -371,63 +365,5 @@
     mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black 20%, transparent 100%);
     pointer-events: none;
     z-index: 0;
-  }
-
-  /* ── Body ──────────────────────────────────────────────────────────── */
-  .body {
-    display: flex;
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-    z-index: 1;
-    min-height: 0;
-  }
-
-  /* ── Main column (content + pipeline) ─────────────────────────────── */
-  .main-column {
-    display: flex;
-    flex-direction: row;
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    overflow-y: auto; /* this is now the scroll container */
-    align-items: flex-start; /* children take natural height so they can overflow */
-  }
-
-  /* ── Content area ──────────────────────────────────────────────────── */
-  .content-area {
-    flex: 1;
-    min-width: 0;
-    min-height: 100%; /* at least full column height even on short pages */
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    view-transition-name: main-content;
-  }
-
-  /* Sidebar backdrop (mobile history) */
-  .sidebar-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.55);
-    z-index: 35;
-    cursor: pointer;
-    border: none;
-    padding: 0;
-    display: block;
-  }
-
-  /* ── Responsive ────────────────────────────────────────────────────── */
-  @media (max-width: 1023px) {
-    .main-column {
-      flex-direction: column;
-      align-items: stretch;
-      overflow-y: auto;
-    }
-    .content-area {
-      order: 0;
-      min-height: auto;
-    }
   }
 </style>

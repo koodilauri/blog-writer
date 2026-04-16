@@ -48,8 +48,10 @@
   const trashIcon = `<path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/>`
 </script>
 
-<main class="mx-auto box-border flex w-full max-w-[900px] flex-1 flex-col gap-5 p-4 md:p-6">
-  <section class="card-surface overflow-hidden">
+<main
+  class="mx-auto box-border flex w-full max-w-[900px] flex-1 flex-col gap-5 overflow-y-auto p-4 md:p-6"
+>
+  <section class="overflow-hidden rounded-2xl border border-white/7 bg-white/3">
     <!-- Header -->
     <div class="flex flex-wrap items-start justify-between gap-4 border-b border-white/6 px-6 py-5">
       <div class="min-w-0 flex-1">
@@ -103,8 +105,7 @@
 
     <!-- Footer: word count -->
     <div
-      class="flex items-center gap-2 border-t border-white/6 px-6 py-2.5 text-[0.75rem] text-white/20"
-      style="background:rgba(255,255,255,0.015)"
+      class="flex items-center gap-2 border-t border-white/6 bg-white/1.5 px-6 py-2.5 text-[0.75rem] text-white/20"
     >
       <span>{data.post.post.trim().split(/\s+/).filter(Boolean).length} words</span>
       <span>·</span>
@@ -114,10 +115,12 @@
 
   <!-- Sources + SEO -->
   {#if data.post.sources?.length || data.post.seoMeta}
-    <section class="card-surface flex flex-wrap gap-8 p-6">
+    <section class="flex flex-wrap gap-8 rounded-2xl border border-white/7 bg-white/3 p-6">
       {#if data.post.sources?.length}
         <div class="min-w-[280px] flex-1">
-          <p class="section-label mb-3">Sources</p>
+          <p class="mb-3 text-[0.68rem] font-semibold tracking-[0.08em] text-white/25 uppercase">
+            Sources
+          </p>
           <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
             {#each data.post.sources as s}
               <li>
@@ -136,29 +139,42 @@
 
       {#if data.post.seoMeta}
         <div class="min-w-[280px] flex-1">
-          <p class="section-label mb-3">SEO Metadata</p>
-          <p class="section-label mt-0 mb-1.5">Title options</p>
+          <p class="mb-3 text-[0.68rem] font-semibold tracking-[0.08em] text-white/25 uppercase">
+            SEO Metadata
+          </p>
+          <p class="mb-1.5 text-[0.68rem] font-semibold tracking-[0.08em] text-white/25 uppercase">
+            Title options
+          </p>
           <ul class="m-0 mb-2 flex list-none flex-col gap-1.5 p-0">
             {#each data.post.seoMeta.titles as title}
               <li>
-                <button class="seo-copy-row" onclick={() => copyToClipboard(title)}>
+                <button
+                  class="group hover:border-brand-400/30 hover:bg-brand-400/4 flex w-full cursor-pointer items-start justify-between gap-3 rounded-lg border border-white/7 bg-white/3 px-3 py-2.5 text-left text-[0.85rem] text-white/65 transition-[border-color,background] duration-150 hover:text-white/85"
+                  onclick={() => copyToClipboard(title)}
+                >
                   <span>{title}</span>
                   <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
-                    >{@html copyIcon}</svg
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    class="group-hover:text-brand-400 shrink-0 text-white/25">{@html copyIcon}</svg
                   >
                 </button>
               </li>
             {/each}
           </ul>
-          <p class="section-label mt-4 mb-1.5">
+          <p
+            class="mt-4 mb-1.5 text-[0.68rem] font-semibold tracking-[0.08em] text-white/25 uppercase"
+          >
             Meta description
             <span class="font-normal tracking-normal normal-case"
               >({data.post.seoMeta.metaDescription.length} chars)</span
             >
           </p>
           <button
-            class="seo-copy-row"
+            class="group hover:border-brand-400/30 hover:bg-brand-400/4 flex w-full cursor-pointer items-start justify-between gap-3 rounded-lg border border-white/7 bg-white/3 px-3 py-2.5 text-left text-[0.85rem] text-white/65 transition-[border-color,background] duration-150 hover:text-white/85"
             onclick={() => copyToClipboard(data.post.seoMeta!.metaDescription)}
           >
             <span class="text-[0.82rem] leading-[1.55]">{data.post.seoMeta.metaDescription}</span>
@@ -168,23 +184,38 @@
               height="14"
               viewBox="0 0 20 20"
               fill="currentColor"
-              style="flex-shrink:0;margin-top:2px">{@html copyIcon}</svg
+              class="group-hover:text-brand-400 mt-0.5 shrink-0 text-white/25">{@html copyIcon}</svg
             >
           </button>
           <div class="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <p class="section-label mt-4 mb-1.5">Slug</p>
-              <button class="seo-copy-row" onclick={() => copyToClipboard(data.post.seoMeta!.slug)}>
+              <p
+                class="mt-4 mb-1.5 text-[0.68rem] font-semibold tracking-[0.08em] text-white/25 uppercase"
+              >
+                Slug
+              </p>
+              <button
+                class="group hover:border-brand-400/30 hover:bg-brand-400/4 flex w-full cursor-pointer items-start justify-between gap-3 rounded-lg border border-white/7 bg-white/3 px-3 py-2.5 text-left text-[0.85rem] text-white/65 transition-[border-color,background] duration-150 hover:text-white/85"
+                onclick={() => copyToClipboard(data.post.seoMeta!.slug)}
+              >
                 <code class="text-brand-400 font-mono text-[0.82rem]">{data.post.seoMeta.slug}</code
                 >
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"
-                  >{@html copyIcon}</svg
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  class="group-hover:text-brand-400 shrink-0 text-white/25">{@html copyIcon}</svg
                 >
               </button>
             </div>
             <div>
-              <p class="section-label mt-4 mb-1.5">Tags</p>
+              <p
+                class="mt-4 mb-1.5 text-[0.68rem] font-semibold tracking-[0.08em] text-white/25 uppercase"
+              >
+                Tags
+              </p>
               <div class="mt-1.5 flex flex-wrap gap-1.5">
                 {#each data.post.seoMeta.tags as tag}
                   <Badge
@@ -228,10 +259,6 @@
 </Dialog.Root>
 
 <style>
-  main {
-    flex: 1;
-  }
-
   /* ── Prose — keep entirely: complex rendered markdown ─────────────── */
   .prose {
     font-family: 'Lora', Georgia, serif;
