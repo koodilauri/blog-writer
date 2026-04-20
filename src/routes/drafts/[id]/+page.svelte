@@ -14,6 +14,7 @@
   import { Textarea } from '$lib/components/ui/textarea'
   import { SessionSchema } from '$lib/schemas/session'
   import { StageEventSchema, ErrorResponseSchema } from '$lib/schemas/events'
+  import { DraftParamsSchema } from '$lib/schemas/draft'
 
   function renderMd(text: string): string {
     return marked.parse(text, { async: false }) as string
@@ -182,11 +183,13 @@
       const stored = sessionStorage.getItem(`draft:${postId}`)
       if (stored) {
         sessionStorage.removeItem(`draft:${postId}`)
-        const params = JSON.parse(stored) as Record<string, string>
-        topic = params.topic ?? topic
-        format = params.format ?? format
-        tone = params.tone ?? tone
-        wordCount = params.wordCount ?? wordCount
+        const result = DraftParamsSchema.safeParse(JSON.parse(stored))
+        if (result.success) {
+          topic = result.data.topic
+          format = result.data.format
+          tone = result.data.tone
+          wordCount = result.data.wordCount
+        }
       }
       await startGeneration()
       return
@@ -202,11 +205,13 @@
     const stored = sessionStorage.getItem(`draft:${postId}`)
     if (stored) {
       sessionStorage.removeItem(`draft:${postId}`)
-      const params = JSON.parse(stored) as Record<string, string>
-      topic = params.topic ?? topic
-      format = params.format ?? format
-      tone = params.tone ?? tone
-      wordCount = params.wordCount ?? wordCount
+      const result = DraftParamsSchema.safeParse(JSON.parse(stored))
+      if (result.success) {
+        topic = result.data.topic
+        format = result.data.format
+        tone = result.data.tone
+        wordCount = result.data.wordCount
+      }
       await startGeneration()
       return
     }
